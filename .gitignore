@@ -1,0 +1,29 @@
+# CMake build output and local configuration
+/build/
+/cmake-build-*/
+/out/
+/CMakeFiles/
+/CMakeCache.txt
+/cmake_install.cmake
+/compile_commands.json
+/CMakeUserPresets.json
+
+# Compiled artifacts and debug symbols
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.pdb
+*.dSYM/
+
+# Local editor settings
+.vscode/
+.vs/
+
+# Slurm output
+slurm-*.out
