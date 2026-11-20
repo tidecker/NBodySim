@@ -3,6 +3,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <string>
+#include <vector>
 
 namespace nbody {
 
@@ -17,8 +19,17 @@ struct Config {
 };
 
 Config parse_config(int argc, char* argv[]);
+
+struct NamedSimulation {
+    std::string name;
+    Config config;
+};
+
+std::vector<NamedSimulation> load_batch(const std::filesystem::path& path);
+
 inline constexpr char usage[] =
     "Usage: nbody_sim [--mode two-body|random] [--particles N] [--dt DT]\n"
-    "                 [--steps N] [--seed N] [--output-dir PATH] [--help]\n";
+    "                 [--steps N] [--seed N] [--output-dir PATH] [--help]\n"
+    "       nbody_sim --config simulations.txt\n";
 
 } // namespace nbody

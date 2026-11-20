@@ -2,12 +2,16 @@
 
 #include <charconv>
 #include <cmath>
+#include <fstream>
+#include <limits>
 #include <locale>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <unordered_set>
+#include <utility>
 
 namespace nbody {
 namespace {
@@ -22,6 +26,98 @@ UInt parse_unsigned(std::string_view value, std::string_view option)
         throw std::invalid_argument("Invalid unsigned integer for " + std::string(option));
     }
     return result;
+}
+
+double parse_number(std::string_view value, std::string_view option, bool allow_zero)
+{
+    std::istringstream input{std::string(value)};
+    input.imbue(std::locale::classic());
+    double number{};
+    if (!(input >> std::noskipws >> number) ||
+        input.peek() != std::char_traits<char>::eof() ||
+        !std::isfinite(number) || number < 0 || (!allow_zero && number == 0)) {
+        throw std::invalid_argument(std::string(option) +
+            (allow_zero ? " must be finite and nonnegative" : " must be finite and positive"));
+    }
+    return number;
+}
+
+void set_parameter(Config& config, std::optional<std::size_t>& particle_count,
+                   std::string_view key, std::string_view value)
+{
+    if (key == "mode") {
+        if (value != "two-body" && value != "random") {
+            throw std::invalid_argument("mode must be two-body or random");
+        }
+        config.two_body = value == "two-body";
+    } else if (key == "particles") {
+        particle_count = parse_unsigned<std::size_t>(value, key);
+    } else if (key == "dt") {
+        config.dt = parse_number(value, key, false);
+    } else if (key == "steps") {
+        config.steps = parse_unsigned<std::size_t>(value, key);
+    } else if (key == "seed") {
+        config.seed = parse_unsigned<std::uint32_t>(value, key);
+    } else {
+        throw std::invalid_argument("Unknown setting " + std::string(key));
+    }
+}
+
+void validate(Config& config, std::optional<std::size_t> particle_count)
+{
+    config.particles = particle_count.value_or(config.two_body ? 2 : 100);
+    if (config.particles == 0 || (config.two_body && config.particles != 2)) {
+        throw std::invalid_argument("particles must be positive and must be 2 in two-body mode");
+    }
+    if (!std::isfinite(config.dt * static_cast<double>(config.steps))) {
+        throw std::invalid_argument("dt and steps yield a nonfinite end time");
+    }
+}
+
+std::size_t steps_for_duration(double duration, double dt)
+{
+    if (duration == 0) {
+        return 0;
+    }
+    const double ratio = duration / dt;
+    const double nearest = std::round(ratio);
+    const double tolerance = 4 * std::numeric_limits<double>::epsilon() * ratio;
+    const double steps = nearest >= 1 && std::abs(ratio - nearest) <= tolerance
+        ? nearest : std::ceil(ratio);
+    // Compare against the first unrepresentable integer before converting.
+    if (!std::isfinite(steps) ||
+        steps >= std::ldexp(1.0, std::numeric_limits<std::size_t>::digits)) {
+        throw std::invalid_argument("duration and dt require too many steps");
+    }
+    return steps < 1 ? 1 : static_cast<std::size_t>(steps);
+}
+
+std::string_view trim(std::string_view value)
+{
+    const auto first = value.find_first_not_of(" \t\r\n");
+    if (first == std::string_view::npos) {
+        return {};
+    }
+    return value.substr(first, value.find_last_not_of(" \t\r\n") - first + 1);
+}
+
+std::string output_name_key(std::string name)
+{
+    if (name.empty() || name.find_first_not_of(
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") != std::string::npos) {
+        throw std::invalid_argument("name must contain only ASCII letters, digits, underscores, or hyphens");
+    }
+    for (char& ch : name) {
+        if (ch >= 'A' && ch <= 'Z') {
+            ch = static_cast<char>(ch - 'A' + 'a');
+        }
+    }
+    if (name == "con" || name == "prn" || name == "aux" || name == "nul" ||
+        (name.size() == 4 && (name.compare(0, 3, "com") == 0 || name.compare(0, 3, "lpt") == 0) &&
+         name.back() >= '1' && name.back() <= '9')) {
+        throw std::invalid_argument("name is reserved on Windows");
+    }
+    return name;
 }
 
 } // namespace
@@ -40,42 +136,115 @@ Config parse_config(int argc, char* argv[])
             throw std::invalid_argument("Missing value for " + std::string(option));
         }
         const std::string_view value = argv[++i];
-        if (option == "--mode") {
-            if (value != "two-body" && value != "random") {
-                throw std::invalid_argument("--mode must be two-body or random");
-            }
-            config.two_body = value == "two-body";
-        } else if (option == "--particles") {
-            particle_count = parse_unsigned<std::size_t>(value, option);
-        } else if (option == "--dt") {
-            std::istringstream input{std::string(value)};
-            input.imbue(std::locale::classic());
-            if (!(input >> std::noskipws >> config.dt) ||
-                input.peek() != std::char_traits<char>::eof() ||
-                !std::isfinite(config.dt) || config.dt <= 0) {
-                throw std::invalid_argument("--dt must be a finite positive number");
-            }
-        } else if (option == "--steps") {
-            config.steps = parse_unsigned<std::size_t>(value, option);
-        } else if (option == "--seed") {
-            config.seed = parse_unsigned<std::uint32_t>(value, option);
-        } else if (option == "--output-dir") {
+        if (option == "--output-dir") {
             if (value.empty()) {
                 throw std::invalid_argument("--output-dir must be nonempty");
             }
             config.output_dir = value;
+        } else if (option == "--config") {
+            throw std::invalid_argument("--config must be used by itself with a file path");
+        } else if (option.substr(0, 2) == "--") {
+            set_parameter(config, particle_count, option.substr(2), value);
         } else {
             throw std::invalid_argument("Unknown option " + std::string(option));
         }
     }
-    config.particles = particle_count.value_or(config.two_body ? 2 : 100);
-    if (config.particles == 0 || (config.two_body && config.particles != 2)) {
-        throw std::invalid_argument("--particles must be positive and must be 2 in two-body mode");
-    }
-    if (!std::isfinite(config.dt * static_cast<double>(config.steps))) {
-        throw std::invalid_argument("--dt and --steps yield a nonfinite end time");
-    }
+    validate(config, particle_count);
     return config;
+}
+
+std::vector<NamedSimulation> load_batch(const std::filesystem::path& path)
+{
+    std::ifstream input(path);
+    if (!input) {
+        throw std::runtime_error("Cannot open configuration file: " + path.string());
+    }
+
+    std::vector<NamedSimulation> simulations;
+    std::unordered_set<std::string> names;
+    std::unordered_set<std::string> keys;
+    NamedSimulation current;
+    std::optional<std::size_t> particle_count;
+    std::optional<double> duration;
+    std::size_t section_line = 0;
+    std::size_t line_number = 0;
+
+    const auto error_at = [&path](std::size_t line, const std::string& message) {
+        return std::runtime_error(path.string() + ":" + std::to_string(line) + ": " + message);
+    };
+    const auto finish_section = [&] {
+        try {
+            const auto name_key = output_name_key(current.name);
+            if ((keys.count("steps") != 0) == duration.has_value()) {
+                throw std::invalid_argument("specify exactly one of steps or duration");
+            }
+            if (duration) {
+                current.config.steps = steps_for_duration(*duration, current.config.dt);
+            }
+            validate(current.config, particle_count);
+            if (!names.insert(name_key).second) {
+                throw std::invalid_argument("duplicate simulation name: " + current.name);
+            }
+            current.config.output_dir /= current.name;
+            simulations.push_back(std::move(current));
+        } catch (const std::invalid_argument& error) {
+            throw error_at(section_line, error.what());
+        }
+    };
+
+    std::string line;
+    while (std::getline(input, line)) {
+        ++line_number;
+        if (line_number == 1 && line.compare(0, 3, "\xEF\xBB\xBF") == 0) {
+            line.erase(0, 3);
+        }
+        const auto text = trim(std::string_view(line).substr(0, line.find_first_of("#;")));
+        if (text.empty()) {
+            continue;
+        }
+        if (text == "[simulation]") {
+            if (section_line != 0) {
+                finish_section();
+            }
+            section_line = line_number;
+            current = {};
+            particle_count.reset();
+            duration.reset();
+            keys.clear();
+            continue;
+        }
+        const auto equals = text.find('=');
+        if (section_line == 0 || equals == std::string_view::npos || text.front() == '[') {
+            throw error_at(line_number, "expected [simulation] or a key = value within a section");
+        }
+        const std::string key(trim(text.substr(0, equals)));
+        const auto value = trim(text.substr(equals + 1));
+        if (key.empty() || value.empty()) {
+            throw error_at(line_number, "expected a nonempty key and value");
+        }
+        if (!keys.insert(key).second) {
+            throw error_at(line_number, "duplicate setting: " + key);
+        }
+        try {
+            if (key == "name") {
+                current.name = value;
+            } else if (key == "duration") {
+                duration = parse_number(value, key, true);
+            } else {
+                set_parameter(current.config, particle_count, key, value);
+            }
+        } catch (const std::invalid_argument& error) {
+            throw error_at(line_number, error.what());
+        }
+    }
+    if (input.bad()) {
+        throw error_at(line_number, "error reading configuration");
+    }
+    if (section_line == 0) {
+        throw error_at(1, "expected at least one [simulation] section");
+    }
+    finish_section();
+    return simulations;
 }
 
 } // namespace nbody

@@ -19,4 +19,15 @@ if(BUILD_TESTING)
     foreach(test IN ITEMS force momentum energy orbit)
         add_test(NAME ${test} COMMAND nbody_tests ${test})
     endforeach()
+    foreach(case IN ITEMS execution validation)
+        add_test(NAME batch_${case} COMMAND "${CMAKE_COMMAND}"
+            "-DSIMULATOR=$<TARGET_FILE:nbody_sim>" "-DCASE=${case}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/batch_tests.cmake")
+    endforeach()
+endif()
+
+option(NBODY_BUILD_VIEWER "Build the OpenGL trajectory viewer" OFF)
+if(NBODY_BUILD_VIEWER)
+    enable_language(C)
+    add_subdirectory(visualization)
 endif()

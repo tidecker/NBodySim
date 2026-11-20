@@ -1,0 +1,16 @@
+# Run from the project root with nbody_sim --config simulations.txt.
+
+[simulation]
+name = batch_orbit
+mode = two-body
+particles = 2
+dt = 0.001
+duration = 4.5
+
+[simulation]
+name = batch_cloud
+mode = random
+particles = 32
+dt = 0.002
+steps = 500
+seed = 42
