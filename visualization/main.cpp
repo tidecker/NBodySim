@@ -26,10 +26,12 @@ int main(int argc, char* argv[])
     }
 
     try {
-        const auto frames = viewer::load_trajectory(argv[1]);
+        const std::filesystem::path trajectory = argv[1];
+        auto frames = viewer::load_trajectory(trajectory);
+        auto settings = nbody::load_view_settings(trajectory.parent_path());
         viewer::Playback playback(frames);
         viewer::Camera camera(frames);
-        viewer::Controls controls{playback, camera};
+        viewer::Controls controls{playback, camera, settings};
 
         glfwSetErrorCallback([](int, const char* message) {
             std::cerr << "GLFW: " << message << '\n';
@@ -66,17 +68,16 @@ int main(int argc, char* argv[])
             previous = now;
 
             const auto index = playback.index();
-            const auto& frame = frames[index];
             std::ostringstream title;
             title << "NBodySim | Frame " << index << '/' << frames.size() - 1
-                  << " | t=" << std::fixed << std::setprecision(3) << frame.time
+                  << " | t=" << std::fixed << std::setprecision(3) << frames[index].time
                   << " | " << std::defaultfloat << std::setprecision(4) << playback.speed()
                   << "x" << (playback.paused() ? " | Paused" : "");
             glfwSetWindowTitle(window.get(), title.str().c_str());
 
             int width, height;
             glfwGetFramebufferSize(window.get(), &width, &height);
-            renderer.draw(frame, camera, width, height);
+            renderer.draw(frames, index, camera, settings, width, height);
             glfwSwapBuffers(window.get());
             glfwPollEvents();
         }

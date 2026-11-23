@@ -49,6 +49,15 @@ duration = 0.30000000000000004
 [simulation]
 name = initial_only
 duration = 0
+
+[simulation]
+name = triple
+mode = three-body
+steps = 1
+[visualization]
+particle_size = 12
+trails = true
+trail_length = 42
 ]=])
     run_batch(0)
     if(NOT summary MATCHES "Simulation short_orbit.*Simulation cloud-3.*Simulation roundoff.*Simulation initial_only" OR
@@ -60,6 +69,11 @@ duration = 0
     check_trajectory(cloud-3 7 "^1,0[.]001,2,")
     check_trajectory(roundoff 9 "^3,")
     check_trajectory(initial_only 3 "^0,0,1,")
+    check_trajectory(triple 7 "^1,0[.]001,2,")
+    file(STRINGS "${work}/output/triple/trajectory.view.ini" settings)
+    if(NOT settings STREQUAL "particle_size=12;trails=true;trail_length=42")
+        message(FATAL_ERROR "Unexpected viewer settings: ${settings}")
+    endif()
     if(EXISTS "${work}/output/trajectory.csv")
         message(FATAL_ERROR "Batch unexpectedly wrote the single-run trajectory")
     endif()
@@ -91,4 +105,5 @@ else()
     check_invalid("[simulation]\nname=bad\nsteps=0\nsteps=1\n" "duplicate setting: steps")
     check_invalid("[simulation]\nname=bad\nsteps=1\nparticles=3\n" "particles must be positive")
     check_invalid("[simulation]\nname=bad\ndt=0.0001\nduration=1e200\n" "duration and dt require too many steps")
+    check_invalid("[simulation]\nname=bad\nsteps=0\n[visualization]\ntrail_length=0\n" "trail_length must be an integer")
 endif()

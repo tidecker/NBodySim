@@ -46,10 +46,7 @@ void set_parameter(Config& config, std::optional<std::size_t>& particle_count,
                    std::string_view key, std::string_view value)
 {
     if (key == "mode") {
-        if (value != "two-body" && value != "random") {
-            throw std::invalid_argument("mode must be two-body or random");
-        }
-        config.two_body = value == "two-body";
+        config.mode = parse_mode(value);
     } else if (key == "particles") {
         particle_count = parse_unsigned<std::size_t>(value, key);
     } else if (key == "dt") {
@@ -65,10 +62,8 @@ void set_parameter(Config& config, std::optional<std::size_t>& particle_count,
 
 void validate(Config& config, std::optional<std::size_t> particle_count)
 {
-    config.particles = particle_count.value_or(config.two_body ? 2 : 100);
-    if (config.particles == 0 || (config.two_body && config.particles != 2)) {
-        throw std::invalid_argument("particles must be positive and must be 2 in two-body mode");
-    }
+    config.particles = particle_count.value_or(default_particle_count(config.mode));
+    validate_particle_count(config.mode, config.particles);
     if (!std::isfinite(config.dt * static_cast<double>(config.steps))) {
         throw std::invalid_argument("dt and steps yield a nonfinite end time");
     }
@@ -213,6 +208,13 @@ std::vector<NamedSimulation> load_batch(const std::filesystem::path& path)
             keys.clear();
             continue;
         }
+        if (text == "[visualization]") {
+            if (section_line == 0 || current.view) {
+                throw error_at(line_number, "expected one [visualization] after a [simulation]");
+            }
+            current.view.emplace();
+            continue;
+        }
         const auto equals = text.find('=');
         if (section_line == 0 || equals == std::string_view::npos || text.front() == '[') {
             throw error_at(line_number, "expected [simulation] or a key = value within a section");
@@ -222,11 +224,13 @@ std::vector<NamedSimulation> load_batch(const std::filesystem::path& path)
         if (key.empty() || value.empty()) {
             throw error_at(line_number, "expected a nonempty key and value");
         }
-        if (!keys.insert(key).second) {
+        if (!keys.insert(current.view ? "view." + key : key).second) {
             throw error_at(line_number, "duplicate setting: " + key);
         }
         try {
-            if (key == "name") {
+            if (current.view) {
+                set_view_setting(*current.view, key, value);
+            } else if (key == "name") {
                 current.name = value;
             } else if (key == "duration") {
                 duration = parse_number(value, key, true);

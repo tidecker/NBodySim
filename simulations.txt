@@ -1,16 +1,122 @@
 # Run from the project root with nbody_sim --config simulations.txt.
 
+
+# Test 1: Basic two-body orbit
 [simulation]
-name = batch_orbit
+name = two_body
 mode = two-body
 particles = 2
 dt = 0.001
-duration = 4.5
+duration = 10
+
+# Test 2: Two-body orbit with larger time steps
+[simulation]
+name = two_body_large_dt
+mode = two-body
+particles = 2
+dt = 0.01
+duration = 10
+
+# Test 3: Small gravitational system
+[simulation]
+name = ten_bodies
+mode = random
+particles = 10
+dt = 0.001
+duration = 5
+seed = 42
+
+# Test 4: Different random initial conditions
+[simulation]
+name = twenty_bodies
+mode = random
+particles = 20
+dt = 0.001
+duration = 5
+seed = 123
+
+# Test 5: Medium particle system
+[simulation]
+name = hundred_bodies
+mode = random
+particles = 100
+dt = 0.001
+steps = 2000
+seed = 42
+
+# Test 6: Larger particle system
+[simulation]
+name = five_hundred_bodies
+mode = random
+particles = 500
+dt = 0.001
+steps = 2000
+seed = 123
+
+# Test 7: Large particle system
+[simulation]
+name = thousand_bodies
+mode = random
+particles = 1000
+dt = 0.001
+steps = 1000
+seed = 456
+
+# Test 8: Performance stress test
+[simulation]
+name = five_thousand_bodies
+mode = random
+particles = 5000
+dt = 0.001
+steps = 500
+seed = 789
+
+# Visualization presets
+[simulation]
+name = solar_demo
+mode = solar-system
+duration = 5
+dt = 0.005
+seed = 42
+
+[visualization]
+particle_size = 9
+trails = true
+trail_length = 80
 
 [simulation]
-name = batch_cloud
-mode = random
-particles = 32
-dt = 0.002
-steps = 500
-seed = 42
+name = galaxy_demo
+mode = galaxy
+particles = 256
+duration = 4
+dt = 0.01
+seed = 86
+
+[visualization]
+particle_size = 4
+trails = false
+trail_length = 32
+
+[simulation]
+name = collision_demo
+mode = collision
+particles = 128
+duration = 4
+dt = 0.005
+seed = 17
+
+[visualization]
+particle_size = 5
+trails = true
+trail_length = 24
+
+[simulation]
+name = three_body_demo
+mode = three-body
+duration = 12
+dt = 0.005
+
+[visualization]
+particle_size = 10
+trails = true
+trail_length = 100

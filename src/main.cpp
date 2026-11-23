@@ -15,9 +15,8 @@ void run_simulation(const nbody::Config& config)
 {
     using Clock = std::chrono::steady_clock;
     auto start = Clock::now();
-    nbody::Simulation simulation(config.two_body
-        ? nbody::make_two_body()
-        : nbody::make_random_system(config.particles, config.seed));
+    nbody::Simulation simulation(nbody::make_initial_conditions(
+        config.mode, config.particles, config.seed));
     auto simulation_time = Clock::now() - start;
 
     start = Clock::now();
@@ -59,6 +58,7 @@ int main(int argc, char* argv[])
                           << "Particles: " << simulation.config.particles << '\n';
                 try {
                     run_simulation(simulation.config);
+                    nbody::save_view_settings(simulation.config.output_dir, simulation.view);
                 } catch (const std::exception& error) {
                     throw std::runtime_error(simulation.name + ": " + error.what());
                 }
@@ -70,6 +70,7 @@ int main(int argc, char* argv[])
                 return 0;
             }
             run_simulation(config);
+            nbody::save_view_settings(config.output_dir, std::nullopt);
         }
         return 0;
     } catch (const std::exception& error) {

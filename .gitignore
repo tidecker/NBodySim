@@ -2,12 +2,19 @@
 /build/
 /cmake-build-*/
 /out/
-/output/
 /CMakeFiles/
 /CMakeCache.txt
 /cmake_install.cmake
+/CTestTestfile.cmake
+/DartConfiguration.tcl
+/Testing/
 /compile_commands.json
 /CMakeUserPresets.json
+
+# Simulation output, including custom --output-dir locations
+/output/
+trajectory.csv
+trajectory.view.ini
 
 # Compiled artifacts and debug symbols
 *.o

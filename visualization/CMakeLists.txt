@@ -1,7 +1,15 @@
-set(GLFW_SOURCE_DIR "C:/libs/glfw-3.4/glfw-3.4" CACHE PATH "GLFW source directory")
-set(GLAD_ROOT "C:/libs/glad" CACHE PATH "GLAD 1 generated source directory")
+if(WIN32)
+    set(glfw_default "C:/libs/glfw-3.4/glfw-3.4")
+    set(glad_default "C:/libs/glad")
+else()
+    set(glfw_default "")
+    set(glad_default "")
+endif()
+set(GLFW_SOURCE_DIR "${glfw_default}" CACHE PATH "GLFW source directory")
+set(GLAD_ROOT "${glad_default}" CACHE PATH "GLAD 1 generated source directory")
 
-if(NOT EXISTS "${GLFW_SOURCE_DIR}/include/GLFW/glfw3.h")
+if(NOT EXISTS "${GLFW_SOURCE_DIR}/CMakeLists.txt" OR
+   NOT EXISTS "${GLFW_SOURCE_DIR}/include/GLFW/glfw3.h")
     message(FATAL_ERROR "Set GLFW_SOURCE_DIR to the root of your GLFW source tree.")
 endif()
 if(NOT EXISTS "${GLAD_ROOT}/include/glad/glad.h" OR
@@ -21,4 +29,4 @@ target_link_libraries(nbody_glad PRIVATE ${CMAKE_DL_LIBS})
 
 add_executable(nbody_viewer main.cpp csv.cpp playback.cpp camera.cpp renderer.cpp)
 target_compile_definitions(nbody_viewer PRIVATE GLFW_INCLUDE_NONE)
-target_link_libraries(nbody_viewer PRIVATE glfw nbody_glad)
+target_link_libraries(nbody_viewer PRIVATE glfw nbody_glad nbody_view_settings)
