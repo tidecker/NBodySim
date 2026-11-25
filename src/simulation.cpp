@@ -57,7 +57,9 @@ void Simulation::advance(double dt)
         particle.position += particle.velocity * dt;
     }
     if (collisions_.enabled) {
-        resolve_collisions(particles_, collisions_, next_id_);
+        const auto step = resolve_collisions(particles_, collisions_, next_id_);
+        counts_.collisions += step.collisions;
+        counts_.merges += step.merges;
     }
     compute_accelerations(particles_);
     for (auto& particle : particles_) {

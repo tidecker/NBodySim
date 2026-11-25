@@ -18,4 +18,7 @@ std::size_t default_particle_count(Mode mode);
 void validate_particle_count(Mode mode, std::size_t count);
 std::vector<Particle> make_initial_conditions(Mode mode, std::size_t count, std::uint32_t seed,
                                               RadiusSettings radii = {});
+std::vector<Particle> make_mixed_initial_conditions(Mode mode, std::size_t count, std::uint32_t seed,
+                                                   RadiusSettings radii,
+                                                   const std::vector<Particle>& manual);
 }

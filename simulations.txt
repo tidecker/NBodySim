@@ -7,163 +7,17 @@
 # Each scenario below lasts at least 10 seconds at 1x playback.
 # All scenarios start with 6 to 999 particles (including custom scenarios).
 
-# 1: Idealized solar system, orbital stability and depth
-[simulation]
-name = solar_orbits
-mode = solar-system
-particles = 12
-dt = 0.005
-duration = 15
-seed = 42
-collisions = false
 
-[visualization]
-particle_size = 9
-sphere_quality = 14
-trails = true
-trail_length = 180
-trail_width = 3
-
-# 2: Small random cloud, gravity-only behavior
-[simulation]
-name = random_small
-mode = random
-particles = 20
-dt = 0.005
-duration = 12
-seed = 123
-collisions = false
-min_radius = 0.025
-max_radius = 0.065
-
-[visualization]
-particle_size = 8
-sphere_quality = 12
-trails = true
-trail_length = 120
-trail_width = 3
-
-# 3: Larger random cloud, gravitational interactions
-[simulation]
-name = random_medium
-mode = random
-particles = 120
-dt = 0.005
-duration = 12
-seed = 456
-collisions = false
-min_radius = 0.015
-max_radius = 0.035
-
-[visualization]
-particle_size = 7
-sphere_quality = 10
-trails = true
-trail_length = 80
-trail_width = 2
-
-# 4: Rotating galaxy with orbital trails
-[simulation]
-name = galaxy_trails
-mode = galaxy
-particles = 200
-dt = 0.01
-duration = 15
-seed = 86
-collisions = false
-
-[visualization]
-particle_size = 6
-sphere_quality = 10
-trails = true
-trail_length = 140
-trail_width = 2
-
-# 5: Denser galaxy, visual performance test
-[simulation]
-name = galaxy_dense
-mode = galaxy
-particles = 400
-dt = 0.01
-duration = 12
-seed = 222
-collisions = false
-
-[visualization]
-particle_size = 5
-sphere_quality = 8
-trails = false
-trail_length = 40
-trail_width = 2
-
-# 6: Elastic cluster impacts
-[simulation]
-name = collision_elastic
-mode = collision
-particles = 80
-dt = 0.003
-duration = 12
-seed = 42
-collisions = true
-collision_type = elastic
-min_radius = 0.035
-max_radius = 0.065
-
-[visualization]
-particle_size = 8
-sphere_quality = 12
-trails = true
-trail_length = 100
-trail_width = 3
-
-# 7: Inelastic cluster impacts (compare against elastic)
-[simulation]
-name = collision_inelastic
-mode = collision
-particles = 80
-dt = 0.003
-duration = 12
-seed = 42
-collisions = true
-collision_type = inelastic
-restitution = 0.35
-min_radius = 0.035
-max_radius = 0.065
-
-[visualization]
-particle_size = 8
-sphere_quality = 12
-trails = true
-trail_length = 100
-trail_width = 3
-
-# 8: Merging cluster impacts (same starting conditions)
-[simulation]
-name = collision_merging
-mode = collision
-particles = 80
-dt = 0.003
-duration = 12
-seed = 42
-collisions = true
-collision_type = merge
-min_radius = 0.035
-max_radius = 0.065
-
-[visualization]
-particle_size = 8
-sphere_quality = 12
-trails = true
-trail_length = 100
-trail_width = 3
 
 # 9: Hand-authored system: a fixed central body and six colored orbiters
 [simulation]
 name = custom_orbiters
-mode = custom
-dt = 0.005
+mode = random
+particles = 200
+dt = 0.0005
 duration = 15
-collisions = false
+collisions = true
+collision_type = elastic
 
 [particle]
 name = Anchor
@@ -181,7 +35,7 @@ radius = 0.04
 position = 0.65, 0, 0
 velocity = 0, 1.24, 0
 color = 70, 150, 255
-fixed = false
+fixed = true
 
 [particle]
 name = Green
@@ -190,7 +44,7 @@ radius = 0.05
 position = 0, 0.9, 0
 velocity = -1.05, 0, 0
 color = 80, 230, 140
-fixed = false
+fixed = true
 
 [particle]
 name = Red
@@ -199,7 +53,7 @@ radius = 0.06
 position = -1.2, 0, 0
 velocity = 0, -0.91, 0
 color = 255, 90, 90
-fixed = false
+fixed = true
 
 [particle]
 name = Purple
@@ -208,7 +62,7 @@ radius = 0.04
 position = 0, -1.5, 0
 velocity = 0.82, 0, 0
 color = 185, 110, 255
-fixed = false
+fixed = true
 
 [particle]
 name = Cyan
@@ -217,7 +71,7 @@ radius = 0.04
 position = 1.8, 0, 0
 velocity = 0, 0.73, 0.06
 color = 80, 235, 235
-fixed = false
+fixed = true
 
 [particle]
 name = Orange
@@ -226,7 +80,7 @@ radius = 0.05
 position = 0, 2.1, 0
 velocity = -0.69, 0, 0.04
 color = 255, 155, 55
-fixed = false
+fixed = true
 
 [visualization]
 particle_size = 9
@@ -304,3 +158,40 @@ sphere_quality = 16
 trails = true
 trail_length = 160
 trail_width = 4
+
+[simulation]
+name = mixed_random
+mode = random
+particles = 24
+seed = 42
+dt = 0.005
+duration = 2
+collisions = true
+collision_type = elastic
+
+[particle]
+name = Amber Anchor
+mass = 0.5
+radius = 0.22
+position = 0, 0, 0
+velocity = 0, 0, 0
+color = 255, 172, 54
+fixed = true
+
+[simulation]
+name = mixed_galaxy
+mode = galaxy
+particles = 48
+seed = 17
+dt = 0.005
+duration = 3
+collisions = false
+
+[particle]
+name = Passing Star
+mass = 0.15
+radius = 0.08
+position = -3, -2, 0.4
+velocity = 0.3, 0.65, 0
+color = 255, 110, 125
+fixed = false

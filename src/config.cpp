@@ -55,11 +55,15 @@ void set_parameter(Config& config, std::optional<std::size_t>& particle_count,
         config.steps = parse_unsigned<std::size_t>(value, key);
     } else if (key == "seed") {
         config.seed = parse_unsigned<std::uint32_t>(value, key);
-    } else if (key == "collisions") {
+    } else if (key == "collisions" || key == "progress") {
         if (value != "true" && value != "false") {
-            throw std::invalid_argument("collisions must be true or false");
+            throw std::invalid_argument(std::string(key) + " must be true or false");
         }
-        config.collisions.enabled = value == "true";
+        if (key == "progress") {
+            config.progress = value == "true";
+        } else {
+            config.collisions.enabled = value == "true";
+        }
     } else if (key == "collision_type" || key == "collision-type") {
         if (value == "elastic") {
             config.collisions.type = CollisionType::elastic;
@@ -92,11 +96,15 @@ void validate(Config& config, std::optional<std::size_t> particle_count)
         if (particle_count) {
             throw std::invalid_argument("custom mode derives its count from [particle] sections");
         }
-        config.particles = config.custom_particles.size();
+        config.particles = 0;
+        validate_particle_count(config.mode, config.manual_particles.size());
     } else {
         config.particles = particle_count.value_or(default_particle_count(config.mode));
+        validate_particle_count(config.mode, config.particles);
     }
-    validate_particle_count(config.mode, config.particles);
+    if (config.particles > std::numeric_limits<std::size_t>::max() - config.manual_particles.size()) {
+        throw std::invalid_argument("total particle count is too large");
+    }
     const auto& radii = config.radii;
     if (radii.min_radius > radii.max_radius) {
         throw std::invalid_argument("min_radius must not exceed max_radius");
@@ -291,7 +299,7 @@ std::vector<NamedSimulation> load_batch(const std::filesystem::path& path)
         if (!particle_names.insert(particle_name).second) {
             throw error_at(particle_line, "duplicate particle name: " + particle_name);
         }
-        current.config.custom_particles.push_back(particle);
+        current.config.manual_particles.push_back(particle);
         particle_line = 0;
     };
     const auto finish_section = [&] {
@@ -338,8 +346,8 @@ std::vector<NamedSimulation> load_batch(const std::filesystem::path& path)
             continue;
         }
         if (text == "[particle]") {
-            if (section_line == 0 || current.config.mode != Mode::custom || current.view) {
-                throw error_at(line_number, "expected [particle] after custom simulation settings and before [visualization]");
+            if (section_line == 0 || current.view) {
+                throw error_at(line_number, "expected [particle] after simulation settings and before [visualization]");
             }
             finish_particle();
             particle_line = line_number;

@@ -30,7 +30,7 @@ void merge(Particle& a, const Particle& b, std::size_t id)
     if (!a.fixed) {
         a.position += (b.position - a.position) * share;
         a.velocity += (b.velocity - a.velocity) * share;
-        if (b.id < a.id) {
+        if (b.color && (!a.color || b.id < a.id)) {
             a.color = b.color;
         }
         a.id = id;
@@ -43,12 +43,12 @@ void merge(Particle& a, const Particle& b, std::size_t id)
 
 } // namespace
 
-void resolve_collisions(std::vector<Particle>& particles, const CollisionSettings& settings,
+CollisionCounts resolve_collisions(std::vector<Particle>& particles, const CollisionSettings& settings,
                         std::size_t& next_id)
 {
     const bool merging = settings.type == CollisionType::merge;
     const double restitution = settings.type == CollisionType::elastic ? 1 : settings.restitution;
-    bool merged = false;
+    CollisionCounts counts;
     // A bounded number of passes also addresses contacts created by a correction.
     for (int pass = 0; pass < 4; ++pass) {
         bool contact = false;
@@ -68,13 +68,14 @@ void resolve_collisions(std::vector<Particle>& particles, const CollisionSetting
                     continue;
                 }
                 contact = true;
+                ++counts.collisions;
                 if (merging) {
                     if (b.fixed) {
                         std::swap(a, b);
                     }
                     merge(a, b, a.fixed ? a.id : next_id++);
                     particles.erase(particles.begin() + j);
-                    merged = true;
+                    ++counts.merges;
                 } else {
                     const double distance = std::sqrt(distance_squared);
                     const Vec3 relative = (a.fixed ? Vec3{} : a.velocity) -
@@ -91,10 +92,11 @@ void resolve_collisions(std::vector<Particle>& particles, const CollisionSetting
             break;
         }
     }
-    if (merged) {
+    if (counts.merges != 0) {
         std::sort(particles.begin(), particles.end(),
             [](const Particle& a, const Particle& b) { return a.id < b.id; });
     }
+    return counts;
 }
 
 } // namespace nbody

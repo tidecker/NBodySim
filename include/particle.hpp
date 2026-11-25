@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstddef>
+#include <optional>
 
 namespace nbody {
 
@@ -42,7 +43,7 @@ struct Particle {
     double radius = 0.02;
     std::size_t id = 0;
     bool fixed = false;
-    std::array<unsigned, 3> color{};
+    std::optional<std::array<unsigned, 3>> color;
 };
 
 } // namespace nbody

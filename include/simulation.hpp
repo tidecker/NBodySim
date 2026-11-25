@@ -16,11 +16,13 @@ public:
     explicit Simulation(std::vector<Particle> particles, CollisionSettings collisions = {});
     void advance(double dt);
     const std::vector<Particle>& particles() const { return particles_; }
+    CollisionCounts collision_counts() const { return counts_; }
 
 private:
     std::vector<Particle> particles_;
     CollisionSettings collisions_;
     std::size_t next_id_;
+    CollisionCounts counts_;
 };
 
 } // namespace nbody

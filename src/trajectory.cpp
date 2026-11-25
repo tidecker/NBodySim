@@ -29,7 +29,12 @@ void TrajectoryWriter::write_frame(std::size_t step, double time,
         file_ << step << ',' << time << ',' << particle.id << ','
               << position.x << ',' << position.y << ',' << position.z << ',' << particle.radius;
         if (write_color_) {
-            file_ << ',' << particle.color[0] << ',' << particle.color[1] << ',' << particle.color[2];
+            if (particle.color) {
+                const auto& rgb = *particle.color;
+                file_ << ',' << rgb[0] << ',' << rgb[1] << ',' << rgb[2];
+            } else {
+                file_ << ",,,";
+            }
         }
         file_ << '\n';
     }

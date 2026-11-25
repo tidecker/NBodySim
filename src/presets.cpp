@@ -2,9 +2,12 @@
 #include "physics.hpp"
 #include "simulation.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
 #include <random>
 #include <stdexcept>
+#include <utility>
 
 namespace nbody {
 namespace {
@@ -178,5 +181,68 @@ std::vector<Particle> make_initial_conditions(Mode mode, std::size_t count, std:
         center_system(particles);
     }
     return particles;
+}
+
+std::vector<Particle> make_mixed_initial_conditions(Mode mode, std::size_t count, std::uint32_t seed,
+                                                   RadiusSettings radii,
+                                                   const std::vector<Particle>& manual)
+{
+    auto generated = make_initial_conditions(mode, count, seed, radii);
+    if (mode == Mode::random) {
+        std::mt19937 engine(seed ^ 0x85ebca6bu);
+        for (auto& particle : generated) {
+            const auto overlaps = [&particle](const Particle& body) {
+                const Vec3 offset = particle.position - body.position;
+                const double clearance = particle.radius + body.radius;
+                return dot(offset, offset) < clearance * clearance;
+            };
+            for (int attempt = 0; std::any_of(manual.begin(), manual.end(), overlaps); ++attempt) {
+                if (attempt == 1024) {
+                    throw std::invalid_argument("cannot place a random particle outside manual bodies after 1024 retries");
+                }
+                particle.position = {2 * sample(engine) - 1, 2 * sample(engine) - 1,
+                                     2 * sample(engine) - 1};
+            }
+        }
+    } else {
+        // Each pair forbids an interval of X translations where its spheres overlap.
+        std::vector<std::pair<double, double>> forbidden;
+        bool overlaps_at_start = false;
+        for (const auto& particle : generated) {
+            for (const auto& body : manual) {
+                const Vec3 offset = body.position - particle.position;
+                const double clearance = particle.radius + body.radius;
+                const double remaining = clearance * clearance - offset.y * offset.y - offset.z * offset.z;
+                if (remaining > 0) {
+                    const double half_width = std::sqrt(remaining);
+                    const double left = offset.x - half_width;
+                    const double right = offset.x + half_width;
+                    if (right > 0) {
+                        forbidden.emplace_back(left, right);
+                        overlaps_at_start |= left < 0;
+                    }
+                }
+            }
+        }
+        if (overlaps_at_start) {
+            std::sort(forbidden.begin(), forbidden.end());
+            double shift = 0;
+            for (const auto& interval : forbidden) {
+                if (interval.first > shift) {
+                    break;
+                }
+                if (interval.second >= shift) {
+                    // Leave room for rounding when adding the shift to positions.
+                    shift = interval.second + 16 * std::numeric_limits<double>::epsilon() *
+                        (1 + std::abs(interval.second));
+                }
+            }
+            for (auto& particle : generated) {
+                particle.position.x += shift;
+            }
+        }
+    }
+    generated.insert(generated.end(), manual.begin(), manual.end());
+    return generated;
 }
 }

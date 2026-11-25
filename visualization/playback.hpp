@@ -14,6 +14,7 @@ public:
     bool paused() const { return paused_; }
     double speed() const { return speed_; }
     std::size_t index() const { return index_; }
+    const Frame& frame() const { return frames_[index_]; }
 
 private:
     const std::vector<Frame>& frames_;

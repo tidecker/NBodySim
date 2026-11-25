@@ -148,7 +148,7 @@ enum Buffer { grid_buffer, mesh_buffer, index_buffer, sphere_buffer, trail_buffe
 
 } // namespace
 
-Renderer::Renderer(unsigned quality) : program_(create_program())
+Renderer::Renderer(unsigned quality, const Camera& camera) : program_(create_program())
 {
     eye_ = glGetUniformLocation(program_, "eye");
     right_ = glGetUniformLocation(program_, "right");
@@ -168,13 +168,20 @@ Renderer::Renderer(unsigned quality) : program_(create_program())
     glClearColor(0.035f, 0.05f, 0.08f, 1.0f);
 
     std::vector<Position> grid;
+    const double extent = camera.scene_radius();
+    const auto add_line = [&](const std::array<double, 3>& start, const std::array<double, 3>& end) {
+        grid.push_back(camera.scene_position(start));
+        grid.push_back(camera.scene_position(end));
+    };
     for (int i = -5; i <= 5; ++i) {
-        const float coordinate = i * 0.2f;
-        grid.insert(grid.end(), {{coordinate, -1, 0}, {coordinate, 1, 0},
-                                {-1, coordinate, 0}, {1, coordinate, 0}});
+        const double coordinate = i * extent / 5;
+        add_line({coordinate, -extent, 0}, {coordinate, extent, 0});
+        add_line({-extent, coordinate, 0}, {extent, coordinate, 0});
     }
-    grid.insert(grid.end(), {{0, 0, 0}, {1.15f, 0, 0}, {0, 0, 0}, {0, 1.15f, 0},
-                            {0, 0, 0}, {0, 0, 1.15f}});
+    const double axis_length = 1.15 * extent;
+    add_line({0, 0, 0}, {axis_length, 0, 0});
+    add_line({0, 0, 0}, {0, axis_length, 0});
+    add_line({0, 0, 0}, {0, 0, axis_length});
     glBindVertexArray(arrays_[reference]);
     upload(GL_ARRAY_BUFFER, buffers_[grid_buffer], grid, GL_STATIC_DRAW);
     attribute(0, 3, sizeof(Position), 0, 0);

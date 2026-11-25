@@ -9,7 +9,7 @@ class Camera;
 
 class Renderer {
 public:
-    explicit Renderer(unsigned sphere_quality);
+    Renderer(unsigned sphere_quality, const Camera& camera);
     ~Renderer();
     Renderer(const Renderer&) = delete;
     Renderer& operator=(const Renderer&) = delete;

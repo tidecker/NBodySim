@@ -32,13 +32,23 @@ int main()
             std::ofstream out("color-trajectory-test.csv");
             out << "step,time,particle_id,x,y,z,radius,red,green,blue\n"
                    "0,0,0,1,2,3,0.25,0,0,0\n0,0,1,0,0,0,0.5,255,128,0\n"
+                   "0,0,2,4,5,6,0.25,,,\n"
                    "1,1,1,0,0,0,0.625,255,128,0\n";
         }
-        const auto colored = viewer::load_trajectory("color-trajectory-test.csv");
+        bool closed_at_completion = false;
+        const auto colored = viewer::load_trajectory("color-trajectory-test.csv", [&](double fraction) {
+            if (fraction == 1) {
+                std::filesystem::rename("color-trajectory-test.csv", "color-trajectory-renamed.csv");
+                std::filesystem::rename("color-trajectory-renamed.csv", "color-trajectory-test.csv");
+                closed_at_completion = true;
+            }
+        });
         const std::array<float, 3> black{0, 0, 0};
         const std::array<float, 3> orange{1, 128.0f / 255, 0};
-        if (colored.size() != 2 || colored[0].bodies.size() != 2 || colored[1].bodies.size() != 1 ||
+        if (!closed_at_completion || colored.size() != 2 ||
+            colored[0].bodies.size() != 3 || colored[1].bodies.size() != 1 ||
             colored[0].bodies[0].color != black || colored[0].bodies[1].color != orange ||
+            colored[0].bodies[2].color ||
             colored[1].bodies[0].id != 1 || colored[1].bodies[0].color != orange ||
             colored[1].bodies[0].radius != 0.625f) {
             throw std::runtime_error("Could not read trajectory with custom RGB");

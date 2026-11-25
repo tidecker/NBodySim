@@ -14,7 +14,12 @@ struct CollisionSettings {
     double restitution = 0.5;
 };
 
-void resolve_collisions(std::vector<Particle>& particles, const CollisionSettings& settings,
+struct CollisionCounts {
+    std::size_t collisions = 0;
+    std::size_t merges = 0;
+};
+
+CollisionCounts resolve_collisions(std::vector<Particle>& particles, const CollisionSettings& settings,
                         std::size_t& next_id);
 
 } // namespace nbody

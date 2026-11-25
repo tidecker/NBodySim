@@ -2,6 +2,7 @@
 
 #include <array>
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <vector>
 
@@ -21,6 +22,7 @@ struct Frame {
     std::vector<Body> bodies;
 };
 
-std::vector<Frame> load_trajectory(const std::filesystem::path& path);
+using LoadProgress = std::function<void(double)>;
+std::vector<Frame> load_trajectory(const std::filesystem::path& path, const LoadProgress& progress = {});
 
 } // namespace viewer

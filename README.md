@@ -62,15 +62,19 @@ cmake --build build
 | `--seed` | `42` | Unsigned 32-bit seed for random, solar-system, galaxy, and collision modes. |
 | `--output-dir` | `output` | Destination directory, created if needed. |
 | `--help` | | Print usage. |
+| `--progress true\|false` | `true` | Show the progress bar and ETA. Use `--progress false` for benchmarking. |
 
 Each run writes `trajectory.csv` with columns `step,time,particle_id,x,y,z,radius`.
-Custom runs append `red,green,blue` as integers from 0 to 255. The viewer uses
-these colors for spheres and trails and uses its ID-based palette for older CSVs
-and preset runs.
+Runs with manual particles append `red,green,blue` as integers from 0 to 255.
+Generated particles in a mixed run have three empty color fields. The viewer
+uses the assigned colors for spheres and trails and its ID-based palette for
+particles without an assigned color.
 Frames start at step 0 and time 0. Each contains one row per live body in
-ascending ID order. Initial IDs start at zero and follow declaration order in
-custom runs. When two movable particles merge, both original IDs retire and
-the new body gets a fresh ID and inherits the lower original ID's color.
+ascending ID order. Initial IDs start at zero. Generated particles come first,
+followed by manual particles in declaration order. When two movable particles
+merge, both original IDs retire and the new body gets a fresh ID. It inherits
+an assigned color if either particle has one, using the lower original ID if
+both have assigned colors.
 A fixed body keeps its ID and color when it absorbs another body.
 Reusing an output directory
 overwrites its trajectory.
@@ -130,14 +134,25 @@ correction can change gravitational potential energy.
 
 ### Manually defined particles
 
-Set `mode = custom` in a batch `[simulation]` and add one or more `[particle]`
-sections after its simulation settings and before its optional `[visualization]`.
-The number of sections sets the particle count. Each particle requires all seven
+Add `[particle]` sections after the batch `[simulation]` settings and before
+its optional `[visualization]` section. In preset modes, `particles` counts only
+generated bodies, including any preset central body. Manual bodies add to that
+count. Use `mode = custom` for a manual-only run and omit `particles`.
+Each manual particle requires all seven
 fields. Names are unique and case-sensitive within a run. Mass must be finite
 and positive, and radius must be between `1e-9` and `1e6` in simulation distance
 units. Position and velocity each take three finite, comma-separated numbers.
 Color takes three comma-separated integers from 0 to 255. Preset radius and
-seed settings do not affect custom particles.
+seed settings apply to generated bodies.
+
+All bodies share the same gravity solver and collision settings. Initial
+placement keeps generated spheres clear of manual spheres, even with collisions
+disabled. In `random` mode, overlapping generated positions are resampled from
+the usual cube using the configured seed. If placement fails after 1,024
+retries for a particle, the batch stops before cleaning up previous results.
+Other presets shift the generated group along positive X when needed, preserving
+its internal layout and velocities. Manual positions stay as configured.
+The batch file includes mixed random and galaxy examples.
 
 ```ini
 [simulation]
@@ -235,6 +250,9 @@ immediate run folders, including runs omitted from the new configuration. It
 also removes run folders emptied by cleanup. These paths are relative to the
 working directory. Cleanup preserves unrelated files and skips links and
 junctions. Single-run CLI invocations bypass batch cleanup.
+Before removing any result, the simulator checks all candidates for Windows
+delete-sharing restrictions or Unix advisory `flock` locks. If a result is
+locked, the batch reports its path and leaves the previous results in place.
 
 Move any run you want to keep into `saved_sim/` before starting another batch.
 The simulator creates that directory if needed and leaves its contents untouched.
@@ -245,7 +263,21 @@ Simulations run sequentially in file order. Each writes
 simulation time, and file-writing time. If a run fails, the batch stops and
 results already written by that batch remain.
 
-An optional `[visualization]` section after the simulation settings and any custom particles
+Each run prints its batch position, name, particle count, time step, total
+steps, simulated duration, and collision settings. The terminal progress line
+updates at most five times per second during steady execution and shows step
+count, elapsed time, and estimated time remaining. Redirected output gets one
+completion line per run. Add `progress = false` to a `[simulation]` section to
+disable its progress line while keeping the start and final statistics.
+
+The final statistics include the live particle count, resolved collisions,
+merges, calculation time, file-writing time, and elapsed execution time. A
+collision is a contact resolved by the solver, including merges. A pair can
+contribute more than once if the solver corrects it in multiple passes.
+Calculation and file-writing timers exclude progress display. The batch
+summary totals these counters and reports elapsed time for the entire batch.
+
+An optional `[visualization]` section after the simulation settings and any manual particles
 applies to that simulation only. Omitted keys use viewer defaults:
 
 ```ini
@@ -305,6 +337,7 @@ generator such as Make or Ninja, the viewer is `build/visualization/nbody_viewer
 | Mouse wheel or + / − | Zoom in or out |
 | [ / ] | Decrease or increase particle size |
 | T | Toggle trails |
+| C | Center the camera on the sphere under the pointer and zoom in for inspection |
 | F | Reset the camera to the fitted view |
 | Esc or window close button | Close the viewer |
 
@@ -314,9 +347,20 @@ contiguous. IDs within a frame must be unique and ascending, and all rows in a
 frame share a timestamp. Timestamps start at zero and increase between frames.
 At 1× speed, one simulation time unit plays in one real second.
 
-The perspective camera fits the full trajectory on opening. It uses instanced
+The viewer opens a window before reading the trajectory. The loading screen
+shows a progress bar, with the simulation name, stage, and percentage in the
+title bar. The window stays responsive while reading the CSV and fitting the
+camera. Press Esc to cancel. Playback starts automatically after loading, and
+the CSV closes as soon as it has been read. Loading errors appear in the
+window title and terminal.
+
+The perspective camera fits the full trajectory on opening. Zoom ranges from
+0.001× to 1,000,000× relative to the fitted view, with clipping planes that
+adjust to viewing distance. To inspect a moving body at its current position,
+pause playback, point at it, and press C. The viewer uses instanced
 rendering for shaded, depth-tested spheres and draws a reference grid on the
-centered XY plane. Red, green, and blue axes indicate positive X, Y, and Z.
+world XY plane (`z = 0`). The red, green, and blue axes extend from the world
+origin in the positive X, Y, and Z directions.
 Trails use the sphere's base color and connect matching IDs in consecutive
 frames. A merge between movable bodies starts a new trail. An absorbing fixed
 body retains its ID across the merge. Playback loops without

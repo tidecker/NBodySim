@@ -48,12 +48,14 @@ bool read_line(std::istream& input, std::string& line)
 
 } // namespace
 
-std::vector<Frame> load_trajectory(const std::filesystem::path& path)
+std::vector<Frame> load_trajectory(const std::filesystem::path& path, const LoadProgress& progress)
 {
-    std::ifstream input(path);
+    std::ifstream input(path, std::ios::binary);
     if (!input) {
         throw std::runtime_error("Cannot open trajectory: " + path.string());
     }
+    std::error_code size_error;
+    const auto size = progress ? std::filesystem::file_size(path, size_error) : 0;
     std::string line;
     read_line(input, line);
     const bool has_color = line == "step,time,particle_id,x,y,z,radius,red,green,blue";
@@ -66,6 +68,11 @@ std::vector<Frame> load_trajectory(const std::filesystem::path& path)
     std::size_t line_number = 1;
     while (read_line(input, line)) {
         ++line_number;
+        if (progress && line_number % 2048 == 0) {
+            const auto position = input.tellg();
+            progress(!size_error && size > 0 && position >= 0
+                ? static_cast<double>(position) / size : 0);
+        }
         try {
             std::array<std::string, 10> fields;
             const std::size_t field_count = has_color ? 10 : has_radius ? 7 : 6;
@@ -104,7 +111,7 @@ std::vector<Frame> load_trajectory(const std::filesystem::path& path)
                 throw std::runtime_error("particle IDs must be unique and increasing in each frame");
             }
             Body body{position, radius, id, std::nullopt};
-            if (has_color) {
+            if (has_color && !(fields[7].empty() && fields[8].empty() && fields[9].empty())) {
                 body.color.emplace();
                 for (std::size_t channel = 0; channel < body.color->size(); ++channel) {
                     const int value = parse_number<int>(fields[7 + channel]);
@@ -119,11 +126,19 @@ std::vector<Frame> load_trajectory(const std::filesystem::path& path)
             throw std::runtime_error("CSV line " + std::to_string(line_number) + ": " + error.what());
         }
     }
-    if (input.bad()) {
+    if (input.bad() || !input.eof()) {
         throw std::runtime_error("Error reading trajectory: " + path.string());
+    }
+    input.clear(); // EOF is expected. Check close independently of the final read.
+    input.close();
+    if (!input) {
+        throw std::runtime_error("Error closing trajectory: " + path.string());
     }
     if (frames.empty()) {
         throw std::runtime_error("Trajectory contains no frames");
+    }
+    if (progress) {
+        progress(1);
     }
     return frames;
 }

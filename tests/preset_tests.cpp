@@ -71,6 +71,48 @@ void check_invalid_count(Mode mode, std::size_t count)
     throw std::runtime_error("Invalid count was accepted");
 }
 
+void check_mixed(Mode mode, std::size_t count)
+{
+    const auto preset = make_initial_conditions(mode, count, 42);
+    Particle anchor{5, preset.front().position, {}, {}, 0.3, 0, true, {{12, 34, 56}}};
+    Particle mover{0.02, {0, 4, 0}, {0, 0, 1}, {}, 0.04, 0, false, {{255, 140, 0}}};
+    const auto combined = make_mixed_initial_conditions(mode, count, 42, {}, {anchor, mover});
+    const auto repeat = make_mixed_initial_conditions(mode, count, 42, {}, {anchor, mover});
+    if (combined.size() != count + 2) {
+        throw std::runtime_error("Manual particles changed the generated count");
+    }
+    for (std::size_t i = 0; i < count; ++i) {
+        const auto& p = combined[i];
+        const auto separation = p.position - anchor.position;
+        const double clearance = p.radius + anchor.radius;
+        if (dot(separation, separation) < clearance * clearance ||
+            !equal(p.position, repeat[i].position) || !equal(p.velocity, preset[i].velocity) ||
+            p.mass != preset[i].mass || p.radius != preset[i].radius || p.color || p.fixed) {
+            throw std::runtime_error("Mixed preset placement or generated properties are incorrect");
+        }
+    }
+    const auto& fixed = combined[count];
+    const auto& movable = combined[count + 1];
+    if (!equal(fixed.position, anchor.position) || fixed.mass != anchor.mass ||
+        fixed.radius != anchor.radius || fixed.color != anchor.color || !fixed.fixed ||
+        !equal(movable.position, mover.position) || !equal(movable.velocity, mover.velocity) ||
+        movable.mass != mover.mass || movable.radius != mover.radius || movable.color != mover.color ||
+        movable.fixed) {
+        throw std::runtime_error("Mixed initialization changed manual properties");
+    }
+    Simulation baseline(preset);
+    Simulation simulation(combined);
+    if (equal(simulation.particles().front().acceleration, baseline.particles().front().acceleration) ||
+        dot(simulation.particles().back().acceleration, simulation.particles().back().acceleration) == 0) {
+        throw std::runtime_error("Mixed particles did not participate in gravity");
+    }
+    simulation.advance(0.001);
+    if (simulation.particles()[count].id != count ||
+        !equal(simulation.particles()[count].position, anchor.position)) {
+        throw std::runtime_error("Mixed integration moved a fixed manual particle");
+    }
+}
+
 } // namespace
 
 int main()
@@ -80,6 +122,10 @@ int main()
         check_preset(Mode::galaxy, 256, true);
         check_preset(Mode::collision, 101, true);
         check_preset(Mode::three_body, 3, false);
+        check_mixed(Mode::random, 20);
+        check_mixed(Mode::solar_system, 9);
+        check_mixed(Mode::galaxy, 16);
+        check_mixed(Mode::collision, 21);
         check_invalid_count(Mode::solar_system, 1);
         check_invalid_count(Mode::galaxy, 1);
         check_invalid_count(Mode::collision, 1);

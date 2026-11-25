@@ -46,8 +46,8 @@ void check_bounce(CollisionType type, double restitution)
 
 void check_merge()
 {
-    const std::vector<Particle> bodies{{2, {}, {1, 0, 0}, {}, 0.2, 0, false, {1, 2, 3}},
-                                       {1, {}, {-2, 1, 0}, {}, 0.1, 1, false, {4, 5, 6}}};
+    const std::vector<Particle> bodies{{2, {}, {1, 0, 0}, {}, 0.2, 0, false, {{1, 2, 3}}},
+                                       {1, {}, {-2, 1, 0}, {}, 0.1, 1, false, {{4, 5, 6}}}};
     Simulation simulation(bodies, {true, CollisionType::merge, 0.5});
     simulation.advance(0.001);
     expect(simulation.particles().size() == 1, "integration did not merge");
