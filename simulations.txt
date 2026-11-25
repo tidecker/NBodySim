@@ -1,122 +1,306 @@
-# Run from the project root with nbody_sim --config simulations.txt.
+# NBodySim test suite
+# Run from project root:
+#   .\build\Release\nbody_sim.exe --config simulations.txt
+# View sequentially:
+#   .\run_all.ps1 -ViewOnly
+# At 1x viewer speed, 1 simulated time unit = 1 real second.
+# Each scenario below lasts at least 10 seconds at 1x playback.
+# All scenarios start with 6 to 999 particles (including custom scenarios).
 
-
-# Test 1: Basic two-body orbit
+# 1: Idealized solar system, orbital stability and depth
 [simulation]
-name = two_body
-mode = two-body
-particles = 2
-dt = 0.001
-duration = 10
-
-# Test 2: Two-body orbit with larger time steps
-[simulation]
-name = two_body_large_dt
-mode = two-body
-particles = 2
-dt = 0.01
-duration = 10
-
-# Test 3: Small gravitational system
-[simulation]
-name = ten_bodies
-mode = random
-particles = 10
-dt = 0.001
-duration = 5
-seed = 42
-
-# Test 4: Different random initial conditions
-[simulation]
-name = twenty_bodies
-mode = random
-particles = 20
-dt = 0.001
-duration = 5
-seed = 123
-
-# Test 5: Medium particle system
-[simulation]
-name = hundred_bodies
-mode = random
-particles = 100
-dt = 0.001
-steps = 2000
-seed = 42
-
-# Test 6: Larger particle system
-[simulation]
-name = five_hundred_bodies
-mode = random
-particles = 500
-dt = 0.001
-steps = 2000
-seed = 123
-
-# Test 7: Large particle system
-[simulation]
-name = thousand_bodies
-mode = random
-particles = 1000
-dt = 0.001
-steps = 1000
-seed = 456
-
-# Test 8: Performance stress test
-[simulation]
-name = five_thousand_bodies
-mode = random
-particles = 5000
-dt = 0.001
-steps = 500
-seed = 789
-
-# Visualization presets
-[simulation]
-name = solar_demo
+name = solar_orbits
 mode = solar-system
-duration = 5
+particles = 12
 dt = 0.005
+duration = 15
 seed = 42
+collisions = false
 
 [visualization]
 particle_size = 9
+sphere_quality = 14
 trails = true
-trail_length = 80
+trail_length = 180
+trail_width = 3
 
+# 2: Small random cloud, gravity-only behavior
 [simulation]
-name = galaxy_demo
-mode = galaxy
-particles = 256
-duration = 4
-dt = 0.01
-seed = 86
+name = random_small
+mode = random
+particles = 20
+dt = 0.005
+duration = 12
+seed = 123
+collisions = false
+min_radius = 0.025
+max_radius = 0.065
 
 [visualization]
-particle_size = 4
-trails = false
-trail_length = 32
+particle_size = 8
+sphere_quality = 12
+trails = true
+trail_length = 120
+trail_width = 3
 
+# 3: Larger random cloud, gravitational interactions
 [simulation]
-name = collision_demo
-mode = collision
-particles = 128
-duration = 4
+name = random_medium
+mode = random
+particles = 120
 dt = 0.005
-seed = 17
+duration = 12
+seed = 456
+collisions = false
+min_radius = 0.015
+max_radius = 0.035
+
+[visualization]
+particle_size = 7
+sphere_quality = 10
+trails = true
+trail_length = 80
+trail_width = 2
+
+# 4: Rotating galaxy with orbital trails
+[simulation]
+name = galaxy_trails
+mode = galaxy
+particles = 200
+dt = 0.01
+duration = 15
+seed = 86
+collisions = false
+
+[visualization]
+particle_size = 6
+sphere_quality = 10
+trails = true
+trail_length = 140
+trail_width = 2
+
+# 5: Denser galaxy, visual performance test
+[simulation]
+name = galaxy_dense
+mode = galaxy
+particles = 400
+dt = 0.01
+duration = 12
+seed = 222
+collisions = false
 
 [visualization]
 particle_size = 5
-trails = true
-trail_length = 24
+sphere_quality = 8
+trails = false
+trail_length = 40
+trail_width = 2
 
+# 6: Elastic cluster impacts
 [simulation]
-name = three_body_demo
-mode = three-body
+name = collision_elastic
+mode = collision
+particles = 80
+dt = 0.003
 duration = 12
-dt = 0.005
+seed = 42
+collisions = true
+collision_type = elastic
+min_radius = 0.035
+max_radius = 0.065
 
 [visualization]
-particle_size = 10
+particle_size = 8
+sphere_quality = 12
 trails = true
 trail_length = 100
+trail_width = 3
+
+# 7: Inelastic cluster impacts (compare against elastic)
+[simulation]
+name = collision_inelastic
+mode = collision
+particles = 80
+dt = 0.003
+duration = 12
+seed = 42
+collisions = true
+collision_type = inelastic
+restitution = 0.35
+min_radius = 0.035
+max_radius = 0.065
+
+[visualization]
+particle_size = 8
+sphere_quality = 12
+trails = true
+trail_length = 100
+trail_width = 3
+
+# 8: Merging cluster impacts (same starting conditions)
+[simulation]
+name = collision_merging
+mode = collision
+particles = 80
+dt = 0.003
+duration = 12
+seed = 42
+collisions = true
+collision_type = merge
+min_radius = 0.035
+max_radius = 0.065
+
+[visualization]
+particle_size = 8
+sphere_quality = 12
+trails = true
+trail_length = 100
+trail_width = 3
+
+# 9: Hand-authored system: a fixed central body and six colored orbiters
+[simulation]
+name = custom_orbiters
+mode = custom
+dt = 0.005
+duration = 15
+collisions = false
+
+[particle]
+name = Anchor
+mass = 1
+radius = 0.12
+position = 0, 0, 0
+velocity = 0, 0, 0
+color = 255, 200, 80
+fixed = true
+
+[particle]
+name = Blue
+mass = 0.001
+radius = 0.04
+position = 0.65, 0, 0
+velocity = 0, 1.24, 0
+color = 70, 150, 255
+fixed = false
+
+[particle]
+name = Green
+mass = 0.001
+radius = 0.05
+position = 0, 0.9, 0
+velocity = -1.05, 0, 0
+color = 80, 230, 140
+fixed = false
+
+[particle]
+name = Red
+mass = 0.001
+radius = 0.06
+position = -1.2, 0, 0
+velocity = 0, -0.91, 0
+color = 255, 90, 90
+fixed = false
+
+[particle]
+name = Purple
+mass = 0.001
+radius = 0.04
+position = 0, -1.5, 0
+velocity = 0.82, 0, 0
+color = 185, 110, 255
+fixed = false
+
+[particle]
+name = Cyan
+mass = 0.001
+radius = 0.04
+position = 1.8, 0, 0
+velocity = 0, 0.73, 0.06
+color = 80, 235, 235
+fixed = false
+
+[particle]
+name = Orange
+mass = 0.001
+radius = 0.05
+position = 0, 2.1, 0
+velocity = -0.69, 0, 0.04
+color = 255, 155, 55
+fixed = false
+
+[visualization]
+particle_size = 9
+sphere_quality = 16
+trails = true
+trail_length = 200
+trail_width = 4
+
+# 10: Hand-authored fixed target and five incoming bodies, merge test
+[simulation]
+name = custom_merging_target
+mode = custom
+dt = 0.003
+duration = 12
+collisions = true
+collision_type = merge
+
+[particle]
+name = FixedTarget
+mass = 2
+radius = 0.25
+position = 0, 0, 0
+velocity = 0, 0, 0
+color = 255, 200, 90
+fixed = true
+
+[particle]
+name = IncomingRed
+mass = 0.08
+radius = 0.09
+position = -1.4, 0, 0
+velocity = 0.6, 0, 0
+color = 255, 70, 70
+fixed = false
+
+[particle]
+name = IncomingBlue
+mass = 0.08
+radius = 0.09
+position = 1.6, 0.05, 0
+velocity = -0.55, 0, 0
+color = 80, 140, 255
+fixed = false
+
+[particle]
+name = IncomingGreen
+mass = 0.08
+radius = 0.09
+position = 0, -1.8, 0
+velocity = 0, 0.5, 0
+color = 80, 230, 140
+fixed = false
+
+[particle]
+name = IncomingPurple
+mass = 0.08
+radius = 0.09
+position = 0, 1.9, 0.06
+velocity = 0, -0.5, 0
+color = 185, 110, 255
+fixed = false
+
+[particle]
+name = IncomingCyan
+mass = 0.08
+radius = 0.09
+position = 0, 0, 2.0
+velocity = 0, 0, -0.5
+color = 80, 235, 235
+fixed = false
+
+[visualization]
+particle_size = 9
+sphere_quality = 16
+trails = true
+trail_length = 160
+trail_width = 4

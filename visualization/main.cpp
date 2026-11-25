@@ -58,7 +58,7 @@ int main(int argc, char* argv[])
             throw std::runtime_error("Could not load OpenGL 3.3 functions");
         }
         glfwSwapInterval(1);
-        viewer::Renderer renderer;
+        viewer::Renderer renderer(settings.sphere_quality);
         controls.bind(window.get());
 
         double previous = glfwGetTime();

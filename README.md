@@ -16,6 +16,7 @@ The sequential simulator writes trajectories for playback in the standalone 3D O
 | `simulations.txt` | Batch scenarios, including the preset demos and stress test |
 | `build/` | Generated CMake build tree on Windows and Linux |
 | `output/` | Default location for generated trajectories |
+| `saved_sim/` | Local archive for simulation results you keep manually |
 
 ## Build and test
 
@@ -62,7 +63,17 @@ cmake --build build
 | `--output-dir` | `output` | Destination directory, created if needed. |
 | `--help` | | Print usage. |
 
-Each run writes `trajectory.csv` with columns `step,time,particle_id,x,y,z`. The file contains one row per particle per frame, starting at step 0 and time 0. IDs are zero-based and retain their order across frames. Reusing an output directory overwrites its trajectory.
+Each run writes `trajectory.csv` with columns `step,time,particle_id,x,y,z,radius`.
+Custom runs append `red,green,blue` as integers from 0 to 255. The viewer uses
+these colors for spheres and trails and uses its ID-based palette for older CSVs
+and preset runs.
+Frames start at step 0 and time 0. Each contains one row per live body in
+ascending ID order. Initial IDs start at zero and follow declaration order in
+custom runs. When two movable particles merge, both original IDs retire and
+the new body gets a fresh ID and inherits the lower original ID's color.
+A fixed body keeps its ID and color when it absorbs another body.
+Reusing an output directory
+overwrites its trajectory.
 
 ### Initial-condition presets
 
@@ -84,6 +95,95 @@ mass. Every particle then evolves under the full solver. The disk and collision
 presets start in their center-of-mass frame. The galaxy and clusters are
 demonstration initial conditions with no equilibrium or long-term stability guarantee.
 
+### Radii and contact physics
+
+Set these keys in `[simulation]`. They also have single-run CLI equivalents
+with hyphens in place of underscores.
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `collisions` | `false` | Enable sphere contact handling with `true`. |
+| `collision_type` | `elastic` | Select `elastic`, `inelastic`, or `merge`. |
+| `restitution` | `0.5` | Normal restitution from 0 to 1, used for inelastic impacts. |
+| `min_radius` / `max_radius` | `0.02` / `0.02` | Bounds for ordinary body radii in simulation distance units. |
+| `central_radius` | `0.07` | Radius of the central body in solar-system and galaxy modes. |
+
+Radii must be from `1e-9` to `1e6`, with `min_radius <= max_radius`. Unequal bounds
+produce seeded uniform radii. Masses scale with the cube of radius within each
+group while preserving the preset's total mass, including each cluster's mass
+in collision mode. The central body's mass stays constant during preset initialization. Two-body and three-body use
+the midpoint radius for each body and keep their original masses and velocities.
+Equal bounds keep the original preset masses in every mode. The `collision`
+preset describes how the clusters start. Use `collisions = true` to enable contact.
+
+The solver checks overlaps after the Verlet drift and before recomputing
+gravity. Between movable particles, elastic and inelastic contacts conserve linear momentum and leave
+tangential velocities alone. Elastic impacts conserve kinetic energy at the
+instant of impact. Inelastic impacts reduce the normal relative speed by the
+restitution factor. Merges between movable particles conserve mass, linear momentum, and sphere volume and
+place the new body at the center of mass. Bodies carry no spin or friction.
+
+Contact detection is discrete. Fast bodies can pass through each other between
+steps, and up to four passes per step may leave residual overlap in dense
+systems. Choose a time step small enough to resolve encounters. Overlap
+correction can change gravitational potential energy.
+
+### Manually defined particles
+
+Set `mode = custom` in a batch `[simulation]` and add one or more `[particle]`
+sections after its simulation settings and before its optional `[visualization]`.
+The number of sections sets the particle count. Each particle requires all seven
+fields. Names are unique and case-sensitive within a run. Mass must be finite
+and positive, and radius must be between `1e-9` and `1e6` in simulation distance
+units. Position and velocity each take three finite, comma-separated numbers.
+Color takes three comma-separated integers from 0 to 255. Preset radius and
+seed settings do not affect custom particles.
+
+```ini
+[simulation]
+name = custom_orbit
+mode = custom
+dt = 0.005
+duration = 7
+collisions = false
+
+[particle]
+name = Anchor
+mass = 1
+radius = 0.12
+position = 0, 0, 0
+velocity = 0, 0, 0
+color = 255, 186, 68
+fixed = true
+
+[particle]
+name = Orbiter
+mass = 0.005
+radius = 0.045
+position = 1, 0, 0
+velocity = 0, 1, 0
+color = 70, 174, 255
+fixed = false
+```
+
+A fixed particle stays at its configured position with zero velocity even if
+its input velocity is nonzero. It still exerts gravity on movable particles.
+With `collisions = false` all overlap handling is disabled. With
+`collisions = true`, contacts involving fixed particles follow these rules:
+
+| Contact | Result |
+| --- | --- |
+| Elastic | The movable body takes the full overlap correction and its normal velocity reverses. |
+| Inelastic | The movable body takes the full overlap correction and rebounds with its normal speed scaled by `restitution`. Tangential velocity stays the same in both bounce modes. |
+| Merge | The fixed body absorbs the movable body's mass and sphere volume. Its position, zero velocity, ID, and color are preserved. The absorbed ID retires. |
+| Two fixed bodies | The solver ignores the contact in every mode. |
+
+The fixed position is an external constraint. Total momentum and energy
+conservation may not apply to the movable-particle system, particularly
+when contacts transfer momentum to that constraint or remove a movable body.
+The batch file includes an orbit with contact disabled and an impact demo
+with merging enabled.
+
 ## Batch simulations
 
 Use the included `simulations.txt` from the project root:
@@ -94,6 +194,26 @@ Use the included `simulations.txt` from the project root:
 
 On Linux, run `./build/nbody_sim --config simulations.txt`. Batch mode takes the
 configuration file as its only argument. The existing single-run flags remain available.
+
+### Run and view the batch on Windows
+
+Build the Release simulator and 3D viewer using the Windows commands above.
+Then, from PowerShell in the project root, run:
+
+```powershell
+.\run_all.ps1
+.\run_all.ps1 -ViewOnly
+```
+
+The first command runs the full batch before opening its trajectories. Use
+`-ViewOnly` to replay existing CSVs without running the simulator or cleaning up output. The script
+follows the order in `simulations.txt`, shows the current name and how many
+entries remain, and waits for each viewer window to close. Missing CSVs are
+reported and skipped.
+
+If your local PowerShell session blocks scripts, you can run this local script
+in a separate process with `powershell.exe -ExecutionPolicy RemoteSigned -File .\run_all.ps1 -ViewOnly`.
+Omit `-ViewOnly` to run the batch first.
 
 Repeat the `[simulation]` section for each run. Use one `key = value` per line.
 Blank lines are allowed, and `#` and `;` start comments anywhere on a line.
@@ -109,13 +229,23 @@ the requested duration. A ratio within floating-point roundoff of a positive
 integer uses that integer. For example, `duration = 0.14` with `dt = 0.125`
 uses two steps and ends at time 0.25. A zero duration writes only the initial frame.
 
-The entire configuration is validated before any output is written. Simulations
-then run sequentially in file order. Each writes `output/<name>/trajectory.csv`
-relative to the working directory and reports its particle count, output path,
-simulation time, and file-writing time. Reusing a name in a later batch overwrites
-that trajectory. If a run fails, the batch stops and earlier outputs remain.
+The entire configuration is validated before cleanup. A valid batch removes
+previous `trajectory.csv` and `trajectory.view.ini` files from `output/` and its
+immediate run folders, including runs omitted from the new configuration. It
+also removes run folders emptied by cleanup. These paths are relative to the
+working directory. Cleanup preserves unrelated files and skips links and
+junctions. Single-run CLI invocations bypass batch cleanup.
 
-An optional `[visualization]` section immediately after the simulation settings
+Move any run you want to keep into `saved_sim/` before starting another batch.
+The simulator creates that directory if needed and leaves its contents untouched.
+Git ignores the archive.
+
+Simulations run sequentially in file order. Each writes
+`output/<name>/trajectory.csv` and reports its particle count, output path,
+simulation time, and file-writing time. If a run fails, the batch stops and
+results already written by that batch remain.
+
+An optional `[visualization]` section after the simulation settings and any custom particles
 applies to that simulation only. Omitted keys use viewer defaults:
 
 ```ini
@@ -130,21 +260,25 @@ seed = 42
 particle_size = 9
 trails = true
 trail_length = 80
+sphere_quality = 12
+trail_width = 2
 ```
 
-`particle_size` is an integer from 1 to 64 (default 8), `trails` is
-`true` or `false` (default false), and `trail_length` is 1 to 256 recorded
-frame intervals (default 32). Batch mode saves these settings in
+`particle_size` is an integer from 1 to 64 (default 8). It scales the drawn
+radius by `particle_size / 8`. `trails` is `true` or `false` (default false),
+`trail_length` is 1 to 256 recorded frame intervals (default 32),
+`trail_width` is 1 to 12 pixels (default 2), and `sphere_quality` is 4 to 32
+latitude subdivisions (default 10). Batch mode saves these settings in
 `trajectory.view.ini` beside the CSV. The viewer automatically loads the sidecar
 if present. A new run in the same directory without view settings clears the
 generated sidecar. View options never enter the gravitational solver.
 
 ## Design and limits
 
-- The force kernel evaluates each unordered pair once and applies equal and opposite forces. Velocity Verlet uses a half velocity update, a full position update, a force recalculation, and a second half velocity update. The force kernel and integrator have no dependency on command-line parsing, CSV, or visualization.
+- The force kernel evaluates each unordered pair once and applies equal and opposite forces to movable pairs. A fixed body contributes to the field while its acceleration stays zero. Velocity Verlet uses a half velocity update, a full position update, a force recalculation, and a second half velocity update. The force kernel and integrator have no dependency on command-line parsing, CSV, or visualization.
 - The executable reports wall-clock simulation time for initialization and integration, and file-writing time for directory creation, CSV formatting, writes, and close. The two times are measured separately with `std::chrono::steady_clock`.
 - The solver costs O(N²) per step, and writing every frame costs O(N × (steps + 1)) in output size. Softening bounds close-range acceleration for the provided masses, but the fixed time step still needs to be small enough to resolve encounters. Large steps can produce inaccurate trajectories.
-- CTest covers softened forces, momentum and energy conservation, circular orbital behavior, configuration validation, batch execution, and output naming.
+- CTest covers softened gravity, orbits, collision conservation and restitution, overlap resolution, seeded radii, batch configuration, and reading old and new trajectories.
 
 ## OpenGL trajectory viewer
 
@@ -174,18 +308,20 @@ generator such as Make or Ninja, the viewer is `build/visualization/nbody_viewer
 | F | Reset the camera to the fitted view |
 | Esc or window close button | Close the viewer |
 
-The viewer expects the simulator's `step,time,particle_id,x,y,z` CSV header.
-Rows must be grouped by contiguous steps starting at zero. Each frame must have
-one timestamp and the same count of ascending, zero-based particle IDs. Timestamps
-start at zero and increase between frames. At 1× speed, one simulation time unit
-plays in one real second. Playback loops and the window title shows the displayed frame and time.
+The viewer reads the new radius column and accepts the old six-column header,
+using a uniform display radius for legacy files. Steps start at zero and are
+contiguous. IDs within a frame must be unique and ascending, and all rows in a
+frame share a timestamp. Timestamps start at zero and increase between frames.
+At 1× speed, one simulation time unit plays in one real second.
 
-The perspective camera fits the full trajectory on opening. It draws depth-tested,
-ID-colored points and a reference grid on the centered XY plane. Red, green,
-and blue axes indicate positive X, Y, and Z. Point sizes vary with distance.
-Trails connect the recorded positions leading up to the displayed frame and
-restart at the playback loop boundary. The viewer reduces trail history as
-particle count increases to limit drawing to 200,000 trail segments per frame.
+The perspective camera fits the full trajectory on opening. It uses instanced
+rendering for shaded, depth-tested spheres and draws a reference grid on the
+centered XY plane. Red, green, and blue axes indicate positive X, Y, and Z.
+Trails use the sphere's base color and connect matching IDs in consecutive
+frames. A merge between movable bodies starts a new trail. An absorbing fixed
+body retains its ID across the merge. Playback loops without
+connecting the last frame to the first. Trail geometry is capped at 200,000
+segments per displayed frame.
 It loads the full CSV into memory, so startup time and memory use increase
 with the number of recorded particles and frames.
 

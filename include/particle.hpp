@@ -1,5 +1,8 @@
 #pragma once
 
+#include <array>
+#include <cstddef>
+
 namespace nbody {
 
 struct Vec3 {
@@ -36,6 +39,10 @@ struct Particle {
     Vec3 position;
     Vec3 velocity;
     Vec3 acceleration{};
+    double radius = 0.02;
+    std::size_t id = 0;
+    bool fixed = false;
+    std::array<unsigned, 3> color{};
 };
 
 } // namespace nbody

@@ -34,8 +34,15 @@ std::vector<Particle> make_random_system(std::size_t count, std::uint32_t seed)
     return particles;
 }
 
-Simulation::Simulation(std::vector<Particle> particles) : particles_(std::move(particles))
+Simulation::Simulation(std::vector<Particle> particles, CollisionSettings collisions)
+    : particles_(std::move(particles)), collisions_(collisions), next_id_(particles_.size())
 {
+    for (std::size_t id = 0; id < particles_.size(); ++id) {
+        particles_[id].id = id;
+        if (particles_[id].fixed) {
+            particles_[id].velocity = {};
+        }
+    }
     compute_accelerations(particles_);
 }
 
@@ -43,12 +50,20 @@ void Simulation::advance(double dt)
 {
     const double half_step = 0.5 * dt;
     for (auto& particle : particles_) {
+        if (particle.fixed) {
+            continue;
+        }
         particle.velocity += particle.acceleration * half_step;
         particle.position += particle.velocity * dt;
     }
+    if (collisions_.enabled) {
+        resolve_collisions(particles_, collisions_, next_id_);
+    }
     compute_accelerations(particles_);
     for (auto& particle : particles_) {
-        particle.velocity += particle.acceleration * half_step;
+        if (!particle.fixed) {
+            particle.velocity += particle.acceleration * half_step;
+        }
     }
 }
 

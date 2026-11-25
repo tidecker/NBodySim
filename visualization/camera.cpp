@@ -10,13 +10,17 @@ namespace viewer {
 
 Camera::Camera(std::vector<Frame>& frames)
 {
-    auto low = frames.front().positions.front();
-    auto high = low;
+    std::array<double, 3> low{}, high{};
+    const auto& initial = frames.front().bodies.front();
+    for (std::size_t axis = 0; axis < low.size(); ++axis) {
+        low[axis] = high[axis] = initial.position[axis];
+    }
     for (const auto& frame : frames) {
-        for (const auto& point : frame.positions) {
-            for (std::size_t axis = 0; axis < point.size(); ++axis) {
-                low[axis] = std::min(low[axis], point[axis]);
-                high[axis] = std::max(high[axis], point[axis]);
+        for (const auto& body : frame.bodies) {
+            for (std::size_t axis = 0; axis < low.size(); ++axis) {
+                const double coordinate = body.position[axis];
+                low[axis] = std::min(low[axis], coordinate - body.radius);
+                high[axis] = std::max(high[axis], coordinate + body.radius);
             }
         }
     }
@@ -29,10 +33,11 @@ Camera::Camera(std::vector<Frame>& frames)
     }
     const auto radius = radius_squared == 0 ? 1 : std::sqrt(radius_squared);
     for (auto& frame : frames) {
-        for (auto& point : frame.positions) {
-            for (std::size_t axis = 0; axis < point.size(); ++axis) {
-                point[axis] = static_cast<float>((point[axis] - center[axis]) / radius);
+        for (auto& body : frame.bodies) {
+            for (std::size_t axis = 0; axis < body.position.size(); ++axis) {
+                body.position[axis] = static_cast<float>((body.position[axis] - center[axis]) / radius);
             }
+            body.radius = body.radius > 0 ? static_cast<float>(body.radius / radius) : 0.025f;
         }
     }
     reset();

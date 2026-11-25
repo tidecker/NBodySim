@@ -17,8 +17,12 @@ void compute_accelerations(std::vector<Particle>& particles)
             const double distance_squared = dot(offset, offset) + softening * softening;
             const Vec3 field = offset *
                 (gravitational_constant / (distance_squared * std::sqrt(distance_squared)));
-            a.acceleration += field * b.mass;
-            b.acceleration += field * -a.mass;
+            if (!a.fixed) {
+                a.acceleration += field * b.mass;
+            }
+            if (!b.fixed) {
+                b.acceleration += field * -a.mass;
+            }
         }
     }
 }

@@ -83,7 +83,8 @@ Mode parse_mode(std::string_view name)
     if (name == "galaxy") return Mode::galaxy;
     if (name == "collision") return Mode::collision;
     if (name == "three-body") return Mode::three_body;
-    throw std::invalid_argument("mode must be two-body, random, solar-system, galaxy, collision, or three-body");
+    if (name == "custom") return Mode::custom;
+    throw std::invalid_argument("mode must be two-body, random, solar-system, galaxy, collision, three-body, or custom");
 }
 
 std::size_t default_particle_count(Mode mode)
@@ -92,12 +93,19 @@ std::size_t default_particle_count(Mode mode)
     case Mode::two_body: return 2;
     case Mode::three_body: return 3;
     case Mode::solar_system: return 9;
+    case Mode::custom: return 0;
     default: return 100;
     }
 }
 
 void validate_particle_count(Mode mode, std::size_t count)
 {
+    if (mode == Mode::custom) {
+        if (count == 0) {
+            throw std::invalid_argument("custom mode requires at least one [particle] section");
+        }
+        return;
+    }
     if (mode == Mode::three_body && count != 3) {
         throw std::invalid_argument("particles must be 3 in three-body mode");
     }
@@ -109,9 +117,8 @@ void validate_particle_count(Mode mode, std::size_t count)
     }
 }
 
-std::vector<Particle> make_initial_conditions(Mode mode, std::size_t count, std::uint32_t seed)
+static std::vector<Particle> make_preset(Mode mode, std::size_t count, std::uint32_t seed)
 {
-    validate_particle_count(mode, count);
     std::mt19937 engine(seed);
     switch (mode) {
     case Mode::two_body: return make_two_body();
@@ -119,6 +126,7 @@ std::vector<Particle> make_initial_conditions(Mode mode, std::size_t count, std:
     case Mode::solar_system: return make_disk(count, engine, true);
     case Mode::galaxy: return make_disk(count, engine, false);
     case Mode::collision: return make_collision(count, engine);
+    case Mode::custom: throw std::invalid_argument("custom mode requires manually defined particles");
     case Mode::three_body:
         // Perturbed figure-eight starting configuration with nonzero Z components.
         return {{1, {-0.97000436, 0.2306151, 0.1345122}, {0.466203685, 0.3710279, 0.2129754}},
@@ -126,5 +134,49 @@ std::vector<Particle> make_initial_conditions(Mode mode, std::size_t count, std:
                 {1, {0, -0.0326151, -0.0355122}, {-0.93240737, -0.7470279, -0.4139754}}};
     }
     throw std::invalid_argument("Unknown mode");
+}
+
+std::vector<Particle> make_initial_conditions(Mode mode, std::size_t count, std::uint32_t seed,
+                                              RadiusSettings radii)
+{
+    validate_particle_count(mode, count);
+    auto particles = make_preset(mode, count, seed);
+    const bool disk = mode == Mode::solar_system || mode == Mode::galaxy;
+    const bool fixed = radii.min_radius == radii.max_radius ||
+                       mode == Mode::two_body || mode == Mode::three_body;
+    if (disk) {
+        particles.front().radius = radii.central_radius;
+    }
+    std::mt19937 engine(seed ^ 0x9e3779b9u);
+    const auto apply_radii = [&](std::size_t first, std::size_t end) {
+        if (fixed) {
+            for (auto i = first; i < end; ++i) {
+                particles[i].radius = (radii.min_radius + radii.max_radius) / 2;
+            }
+            return;
+        }
+        double total_mass = 0;
+        double total_volume = 0;
+        for (auto i = first; i < end; ++i) {
+            auto& particle = particles[i];
+            particle.radius = radii.min_radius + (radii.max_radius - radii.min_radius) * sample(engine);
+            total_mass += particle.mass;
+            total_volume += particle.radius * particle.radius * particle.radius;
+        }
+        for (auto i = first; i < end; ++i) {
+            auto& particle = particles[i];
+            particle.mass = total_mass * (particle.radius * particle.radius * particle.radius / total_volume);
+        }
+    };
+    if (mode == Mode::collision) {
+        apply_radii(0, count / 2);
+        apply_radii(count / 2, count);
+    } else {
+        apply_radii(disk ? 1 : 0, count);
+    }
+    if (!fixed) {
+        center_system(particles);
+    }
+    return particles;
 }
 }

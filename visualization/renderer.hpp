@@ -9,7 +9,7 @@ class Camera;
 
 class Renderer {
 public:
-    Renderer();
+    explicit Renderer(unsigned sphere_quality);
     ~Renderer();
     Renderer(const Renderer&) = delete;
     Renderer& operator=(const Renderer&) = delete;
@@ -18,22 +18,27 @@ public:
               const nbody::ViewSettings& settings, int width, int height);
 
 private:
-    unsigned program_ = 0;
-    unsigned vao_ = 0;
-    unsigned buffers_[3]{};
-    int eye_ = -1;
-    int right_ = -1;
-    int up_ = -1;
-    int forward_ = -1;
-    int lens_ = -1;
-    int point_size_ = -1;
-    int points_ = -1;
-    int line_color_ = -1;
+    struct Sphere {
+        Position center;
+        float radius;
+        Position color;
+    };
+    struct Trail {
+        Position start;
+        Position end;
+        Position color;
+    };
+
+    unsigned program_;
+    unsigned arrays_[3]{};
+    unsigned buffers_[5]{};
+    int sphere_indices_ = 0;
+    int eye_, right_, up_, forward_, lens_, size_, kind_, color_, viewport_, trail_width_;
     std::size_t last_index_ = static_cast<std::size_t>(-1);
     std::size_t last_trail_index_ = static_cast<std::size_t>(-1);
     unsigned last_trail_length_ = 0;
-    int trail_vertices_ = 0;
-    std::vector<Position> trails_;
+    std::vector<Sphere> spheres_;
+    std::vector<Trail> trails_;
 };
 
 } // namespace viewer

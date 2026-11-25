@@ -55,6 +55,32 @@ void set_parameter(Config& config, std::optional<std::size_t>& particle_count,
         config.steps = parse_unsigned<std::size_t>(value, key);
     } else if (key == "seed") {
         config.seed = parse_unsigned<std::uint32_t>(value, key);
+    } else if (key == "collisions") {
+        if (value != "true" && value != "false") {
+            throw std::invalid_argument("collisions must be true or false");
+        }
+        config.collisions.enabled = value == "true";
+    } else if (key == "collision_type" || key == "collision-type") {
+        if (value == "elastic") {
+            config.collisions.type = CollisionType::elastic;
+        } else if (value == "inelastic") {
+            config.collisions.type = CollisionType::inelastic;
+        } else if (value == "merge") {
+            config.collisions.type = CollisionType::merge;
+        } else {
+            throw std::invalid_argument("collision_type must be elastic, inelastic, or merge");
+        }
+    } else if (key == "restitution") {
+        config.collisions.restitution = parse_number(value, key, true);
+        if (config.collisions.restitution > 1) {
+            throw std::invalid_argument("restitution must be at most 1");
+        }
+    } else if (key == "min_radius" || key == "min-radius") {
+        config.radii.min_radius = parse_number(value, key, false);
+    } else if (key == "max_radius" || key == "max-radius") {
+        config.radii.max_radius = parse_number(value, key, false);
+    } else if (key == "central_radius" || key == "central-radius") {
+        config.radii.central_radius = parse_number(value, key, false);
     } else {
         throw std::invalid_argument("Unknown setting " + std::string(key));
     }
@@ -62,8 +88,23 @@ void set_parameter(Config& config, std::optional<std::size_t>& particle_count,
 
 void validate(Config& config, std::optional<std::size_t> particle_count)
 {
-    config.particles = particle_count.value_or(default_particle_count(config.mode));
+    if (config.mode == Mode::custom) {
+        if (particle_count) {
+            throw std::invalid_argument("custom mode derives its count from [particle] sections");
+        }
+        config.particles = config.custom_particles.size();
+    } else {
+        config.particles = particle_count.value_or(default_particle_count(config.mode));
+    }
     validate_particle_count(config.mode, config.particles);
+    const auto& radii = config.radii;
+    if (radii.min_radius > radii.max_radius) {
+        throw std::invalid_argument("min_radius must not exceed max_radius");
+    }
+    if (radii.min_radius < 1e-9 || radii.max_radius > 1e6 ||
+        radii.central_radius < 1e-9 || radii.central_radius > 1e6) {
+        throw std::invalid_argument("radii must be between 1e-9 and 1e6");
+    }
     if (!std::isfinite(config.dt * static_cast<double>(config.steps))) {
         throw std::invalid_argument("dt and steps yield a nonfinite end time");
     }
@@ -94,6 +135,72 @@ std::string_view trim(std::string_view value)
         return {};
     }
     return value.substr(first, value.find_last_not_of(" \t\r\n") - first + 1);
+}
+
+template<typename Value, typename Parse>
+std::array<Value, 3> parse_triplet(std::string_view value, std::string_view key, Parse parse)
+{
+    std::array<Value, 3> components{};
+    for (std::size_t i = 0; i < components.size(); ++i) {
+        const auto comma = value.find(',');
+        if ((comma == std::string_view::npos) != (i + 1 == components.size())) {
+            throw std::invalid_argument(std::string(key) + " requires three comma-separated values");
+        }
+        components[i] = parse(trim(value.substr(0, comma)));
+        if (comma != std::string_view::npos) {
+            value.remove_prefix(comma + 1);
+        }
+    }
+    return components;
+}
+
+Vec3 parse_vector(std::string_view value, std::string_view key)
+{
+    const auto components = parse_triplet<double>(value, key, [key](std::string_view field) {
+        std::istringstream input{std::string(field)};
+        input.imbue(std::locale::classic());
+        double number{};
+        if (!(input >> std::noskipws >> number) || !std::isfinite(number) ||
+            input.peek() != std::char_traits<char>::eof()) {
+            throw std::invalid_argument(std::string(key) + " requires finite coordinates");
+        }
+        return number;
+    });
+    return {components[0], components[1], components[2]};
+}
+
+void set_particle_parameter(Particle& particle, std::string& name,
+                            std::string_view key, std::string_view value)
+{
+    if (key == "name") {
+        name = value;
+    } else if (key == "mass") {
+        particle.mass = parse_number(value, key, false);
+    } else if (key == "radius") {
+        particle.radius = parse_number(value, key, false);
+        if (particle.radius < 1e-9 || particle.radius > 1e6) {
+            throw std::invalid_argument("radius must be between 1e-9 and 1e6");
+        }
+    } else if (key == "position") {
+        particle.position = parse_vector(value, key);
+    } else if (key == "velocity") {
+        particle.velocity = parse_vector(value, key);
+    } else if (key == "color") {
+        particle.color = parse_triplet<unsigned>(value, key, [](std::string_view field) {
+            const auto channel = parse_unsigned<unsigned>(field, "color");
+            if (channel > 255) {
+                throw std::invalid_argument("color channels must be between 0 and 255");
+            }
+            return channel;
+        });
+    } else if (key == "fixed") {
+        if (value != "true" && value != "false") {
+            throw std::invalid_argument("fixed must be true or false");
+        }
+        particle.fixed = value == "true";
+    } else {
+        throw std::invalid_argument("Unknown particle setting " + std::string(key));
+    }
 }
 
 std::string output_name_key(std::string name)
@@ -158,6 +265,11 @@ std::vector<NamedSimulation> load_batch(const std::filesystem::path& path)
     std::vector<NamedSimulation> simulations;
     std::unordered_set<std::string> names;
     std::unordered_set<std::string> keys;
+    std::unordered_set<std::string> particle_names;
+    std::unordered_set<std::string> particle_keys;
+    Particle particle{};
+    std::string particle_name;
+    std::size_t particle_line = 0;
     NamedSimulation current;
     std::optional<std::size_t> particle_count;
     std::optional<double> duration;
@@ -167,7 +279,23 @@ std::vector<NamedSimulation> load_batch(const std::filesystem::path& path)
     const auto error_at = [&path](std::size_t line, const std::string& message) {
         return std::runtime_error(path.string() + ":" + std::to_string(line) + ": " + message);
     };
+    const auto finish_particle = [&] {
+        if (particle_line == 0) {
+            return;
+        }
+        for (const char* key : {"name", "mass", "radius", "position", "velocity", "color", "fixed"}) {
+            if (particle_keys.count(key) == 0) {
+                throw error_at(particle_line, std::string("missing particle setting: ") + key);
+            }
+        }
+        if (!particle_names.insert(particle_name).second) {
+            throw error_at(particle_line, "duplicate particle name: " + particle_name);
+        }
+        current.config.custom_particles.push_back(particle);
+        particle_line = 0;
+    };
     const auto finish_section = [&] {
+        finish_particle();
         try {
             const auto name_key = output_name_key(current.name);
             if ((keys.count("steps") != 0) == duration.has_value()) {
@@ -206,12 +334,24 @@ std::vector<NamedSimulation> load_batch(const std::filesystem::path& path)
             particle_count.reset();
             duration.reset();
             keys.clear();
+            particle_names.clear();
+            continue;
+        }
+        if (text == "[particle]") {
+            if (section_line == 0 || current.config.mode != Mode::custom || current.view) {
+                throw error_at(line_number, "expected [particle] after custom simulation settings and before [visualization]");
+            }
+            finish_particle();
+            particle_line = line_number;
+            particle = {};
+            particle_keys.clear();
             continue;
         }
         if (text == "[visualization]") {
             if (section_line == 0 || current.view) {
                 throw error_at(line_number, "expected one [visualization] after a [simulation]");
             }
+            finish_particle();
             current.view.emplace();
             continue;
         }
@@ -224,11 +364,14 @@ std::vector<NamedSimulation> load_batch(const std::filesystem::path& path)
         if (key.empty() || value.empty()) {
             throw error_at(line_number, "expected a nonempty key and value");
         }
-        if (!keys.insert(current.view ? "view." + key : key).second) {
+        auto& section_keys = particle_line != 0 ? particle_keys : keys;
+        if (!section_keys.insert(current.view ? "view." + key : key).second) {
             throw error_at(line_number, "duplicate setting: " + key);
         }
         try {
-            if (current.view) {
+            if (particle_line != 0) {
+                set_particle_parameter(particle, particle_name, key, value);
+            } else if (current.view) {
                 set_view_setting(*current.view, key, value);
             } else if (key == "name") {
                 current.name = value;

@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_library(nbody_core src/physics.cpp src/simulation.cpp src/presets.cpp)
+add_library(nbody_core src/physics.cpp src/simulation.cpp src/presets.cpp src/collisions.cpp)
 target_include_directories(nbody_core PUBLIC include)
 
 add_library(nbody_view_settings src/view_settings.cpp)

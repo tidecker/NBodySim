@@ -18,19 +18,28 @@ void set_view_setting(ViewSettings& settings, std::string_view key, std::string_
         settings.trails = value == "true";
         return;
     }
-    if (key != "particle_size" && key != "trail_length") {
+    if (key != "particle_size" && key != "trail_length" && key != "sphere_quality" &&
+        key != "trail_width") {
         throw std::invalid_argument("Unknown visualization setting " + std::string(key));
     }
     unsigned number{};
     const auto end = value.data() + value.size();
     const auto parsed = std::from_chars(value.data(), end, number);
-    const unsigned maximum = key == "particle_size" ? 64 : 256;
-    if (parsed.ec != std::errc{} || parsed.ptr != end || number < 1 || number > maximum) {
-        throw std::invalid_argument(std::string(key) + " must be an integer from 1 to " +
-                                    std::to_string(maximum));
+    unsigned maximum = 256;
+    if (key == "particle_size") maximum = 64;
+    if (key == "sphere_quality") maximum = 32;
+    if (key == "trail_width") maximum = 12;
+    const unsigned minimum = key == "sphere_quality" ? 4 : 1;
+    if (parsed.ec != std::errc{} || parsed.ptr != end || number < minimum || number > maximum) {
+        throw std::invalid_argument(std::string(key) + " must be an integer from " +
+                                    std::to_string(minimum) + " to " + std::to_string(maximum));
     }
     if (key == "particle_size") {
         settings.particle_size = static_cast<float>(number);
+    } else if (key == "sphere_quality") {
+        settings.sphere_quality = number;
+    } else if (key == "trail_width") {
+        settings.trail_width = number;
     } else {
         settings.trail_length = number;
     }
@@ -50,7 +59,9 @@ void save_view_settings(const std::filesystem::path& directory, const std::optio
     output.open(path);
     output << "particle_size=" << settings->particle_size << '\n'
            << "trails=" << (settings->trails ? "true" : "false") << '\n'
-           << "trail_length=" << settings->trail_length << '\n';
+           << "trail_length=" << settings->trail_length << '\n'
+           << "sphere_quality=" << settings->sphere_quality << '\n'
+           << "trail_width=" << settings->trail_width << '\n';
     output.close();
 }
 

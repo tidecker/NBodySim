@@ -55,8 +55,11 @@ std::vector<Frame> load_trajectory(const std::filesystem::path& path)
         throw std::runtime_error("Cannot open trajectory: " + path.string());
     }
     std::string line;
-    if (!read_line(input, line) || line != "step,time,particle_id,x,y,z") {
-        throw std::runtime_error("Expected CSV header step,time,particle_id,x,y,z");
+    read_line(input, line);
+    const bool has_color = line == "step,time,particle_id,x,y,z,radius,red,green,blue";
+    const bool has_radius = has_color || line == "step,time,particle_id,x,y,z,radius";
+    if (!has_radius && line != "step,time,particle_id,x,y,z") {
+        throw std::runtime_error("Expected CSV header step,time,particle_id,x,y,z[,radius[,red,green,blue]]");
     }
 
     std::vector<Frame> frames;
@@ -64,12 +67,13 @@ std::vector<Frame> load_trajectory(const std::filesystem::path& path)
     while (read_line(input, line)) {
         ++line_number;
         try {
-            std::array<std::string, 6> fields;
+            std::array<std::string, 10> fields;
+            const std::size_t field_count = has_color ? 10 : has_radius ? 7 : 6;
             std::size_t offset = 0;
-            for (std::size_t i = 0; i < fields.size(); ++i) {
+            for (std::size_t i = 0; i < field_count; ++i) {
                 const auto comma = line.find(',', offset);
-                if ((comma == std::string::npos) != (i + 1 == fields.size())) {
-                    throw std::runtime_error("expected six fields");
+                if ((comma == std::string::npos) != (i + 1 == field_count)) {
+                    throw std::runtime_error("unexpected number of fields");
                 }
                 fields[i] = line.substr(offset, comma - offset);
                 offset = comma + 1;
@@ -81,22 +85,36 @@ std::vector<Frame> load_trajectory(const std::filesystem::path& path)
             const Position position{parse_number<float>(fields[3]),
                                     parse_number<float>(fields[4]),
                                     parse_number<float>(fields[5])};
+            const float radius = has_radius ? parse_number<float>(fields[6]) : 0;
+            if (has_radius && radius <= 0) {
+                throw std::runtime_error("radius must be positive");
+            }
 
             if (step == frames.size()) {
                 if (frames.empty() ? time != 0 : time <= frames.back().time) {
                     throw std::runtime_error("frame times must start at zero and increase");
                 }
-                if (frames.size() > 1 &&
-                    frames.back().positions.size() != frames.front().positions.size()) {
-                    throw std::runtime_error("particle count changed between frames");
-                }
                 frames.push_back({time, {}});
             }
-            if (frames.empty() || step != frames.size() - 1 || time != frames.back().time ||
-                id != frames.back().positions.size()) {
-                throw std::runtime_error("expected contiguous steps and particle IDs with one time per frame");
+            if (frames.empty() || step != frames.size() - 1 || time != frames.back().time) {
+                throw std::runtime_error("expected contiguous steps with one time per frame");
             }
-            frames.back().positions.push_back(position);
+            auto& bodies = frames.back().bodies;
+            if (!bodies.empty() && id <= bodies.back().id) {
+                throw std::runtime_error("particle IDs must be unique and increasing in each frame");
+            }
+            Body body{position, radius, id, std::nullopt};
+            if (has_color) {
+                body.color.emplace();
+                for (std::size_t channel = 0; channel < body.color->size(); ++channel) {
+                    const int value = parse_number<int>(fields[7 + channel]);
+                    if (value < 0 || value > 255) {
+                        throw std::runtime_error("color channels must be between 0 and 255");
+                    }
+                    (*body.color)[channel] = static_cast<float>(value) / 255;
+                }
+            }
+            bodies.push_back(body);
         } catch (const std::runtime_error& error) {
             throw std::runtime_error("CSV line " + std::to_string(line_number) + ": " + error.what());
         }
@@ -106,9 +124,6 @@ std::vector<Frame> load_trajectory(const std::filesystem::path& path)
     }
     if (frames.empty()) {
         throw std::runtime_error("Trajectory contains no frames");
-    }
-    if (frames.back().positions.size() != frames.front().positions.size()) {
-        throw std::runtime_error("Particle count changed in the last frame");
     }
     return frames;
 }

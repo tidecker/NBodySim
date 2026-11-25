@@ -13,6 +13,7 @@
 
 # Simulation output, including custom --output-dir locations
 /output/
+/saved_sim/
 trajectory.csv
 trajectory.view.ini
 
